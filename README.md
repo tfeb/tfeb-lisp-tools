@@ -8,7 +8,14 @@ I hope to add more tools as I disentangle them from the things they're currently
 
 The descriptions here are at best partial[^1].
 
-## Naming conventions
+## General
+### Portability
+These tools purport to be portable Common Lisp.  If they're not that's either a bug in the tools or a bug in the CL implementation.  In the former case I very definitely want to know, and I am also willing to add workarounds for the latter although I may be unable to test them on implementations I don't use.
+
+### Zero history
+All of these tools have long and varied histories.  However these histories are entangled with a lot of other code which is not public, so that history is not represented in the publication repo where you are probably reading this.
+
+### Naming conventions
 All of these tools make use of, and often work best with, *domain-structured names*: packages, modules, features and so on have names which start with a DNS domain name in reverse order and then may continue to divide further.  In this case the prefix is `org.tfeb.tools`: `org.tfeb` is the DNS component and `tools` is the division within the DNS part.
 
 This naming convention ensures uniqueness of things like package names.  It does make typing package-qualified names somewhat irritating: the solution is not to do that but to construct packages which import or use the symbols you need.  CL's default package system is very well up to solving this problem, rumours to the contrary notwithstanding: [conduit packages](https://github.com/tfeb/conduit-packages "conduit packages") can make it a little simpler to express what you want to do.
@@ -28,7 +35,7 @@ Well, CL has `require`, `provide` and `*modules*` and although these are depreca
 `require-module` doesn't need you to use logical pathnames, but it does work well with them and I have usually used it that way.  Using logical pathnames gives you two advantages:
 
 - the mechanism for maintaining the search list lets you add & replace a bunch of paths for the same host, and if that's a logical host you can invent new ones, so maintenance becomes easier;
-- there is another level of translation between the names of modules and the physical pathname they come from -- for instance by changing the translations of a logical host you can switch between variants of things easily.
+- there is another level of translation between the names of modules and the physical pathname they come from – for instance by changing the translations of a logical host you can switch between variants of things easily.
 
 In summary you don't have to use logical pathnames, but it can make things easier.
 
@@ -69,11 +76,11 @@ There is a list of path specifications to search: see below for how the list is 
 7. (all the other path specifications);
 8. (equivalent desperation searches, trying downcase and upcase variants as before, a total of 6 more searches).
 
-### Package, module, features
-Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.tools.require-module` will also be present in both `*modules*` and `*features*` once this module is loaded -- the latter helps a lot with conditionals in init files.
+### Package, module, feature
+Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.tools.require-module` will also be present in both `*modules*` and `*features*` once this module is loaded – the latter helps a lot with conditionals in init files.
 
 ### Requiring and locating modules
-`require-module` will search for and requiire modules.  It has one mandatory argument which is the module name, and a number of keyword arguments:
+**`require-module`** will search for and `require` modules.  It has one mandatory argument which is the module name, and a number of keyword arguments:
 
 - `verbose` will cause it to tell you what it's doing, default `nil`;
 - `test` specifies the comparison function to use for module names, by default `#'string=` which is the right default;
@@ -90,29 +97,29 @@ Other keyword arguments are allowed which are passed to possible wrapper functio
 - its first argument and `nil` if the module was already loaded (no search is done in this case);
 - `nil` and `nil` if `error` is `nil` and the module was not found.
 
-`require-module` relies on `require` to do the actual work of loading the file and maintaining `*modules*`.
+`require-module` relies on `require` to do the actual work of loading the file and maintaining `*modules*`.  It will only search (and thus only call `require` on the results of the search) if the module is not already present on `*modules*`.
 
-`locate-module` locates a module: it's what `require-module` uses.  It has one mandatory argument which is the module name, and two keyword arguments:
+**`locate-module`** locates a module: it's what `require-module` uses.  It has one mandatory argument which is the module name, and two keyword arguments:
 
 - `verbose` makes it say what it's doing, default `nil`;
 - `module-path-descriptions`is the list of module path-descriptions, default `*module-path-descriptions*`.
 
 It returns the file it found, or `nil` if it didn't find anything.
 
-`require-modules` is a shim around `require-module` which expects a list of module names instead of one.  All the other arguments are the same.  It returns a list of lists of the two values returned by each `require-module` it calls.
+**`require-modules`** is a tiny shim around `require-module` which expects a list of module names instead of one.  All the other arguments are the same.  It returns a list of lists of the two values returned by each `require-module` it calls.
 
 ### The search list
-The list of path descriptions is `*module-path-descriptions*`.  Each entry in this list is one of:
+The list of path descriptions is **`*module-path-descriptions*`**.  Each entry in this list isa *path description*, which is one of:
 
-- a list, which is the arglist of `make-pathname`;
-- a function of no arguments -- the function is called and it should return something suitable to be an element of the searchlist (this can be another function!);
+- a list, which should consist of suitable arguments to `make-pathname`;
+- a function of no arguments – the function is called and it should return something suitable to be an element of the searchlist (this process is iterated: if the function returns a function then that will be called in turn);
 - something else, which should be a pathname designator (probably either a list of a string) which is handed to `pathname` to turn into a pathname.
 
 The initial value of `*module-path-descriptions*` is `()`.
 
 It is perfectly possible to maintain `*module-path-descriptions*` manually, and that's how it worked for a long time.  There is now a macro which makes this a little easier, perhaps.
 
-`define-module-path-descriptions` defines module path descriptions.  It does this for a particular host (this is one of the reasons logical pathnames are useful), and there are a bunch of options: the most simple ones control whether to add the descriptions before or after the existing ones, and whether to replace existing descriptions for the same host.  Rather than describe it in detail here are a couple of examples (yes, this is copping out);
+**`define-module-path-descriptions`** defines module path descriptions.  It does this for a particular host (this is one of the reasons logical pathnames are useful), and there are a bunch of options: the most simple ones control whether to add the descriptions before or after the existing ones, and whether to replace existing descriptions for the same host.  Rather than describe it in detail here are a couple of examples (yes, this is copping out);
 
 ```lisp
 (define-module-path-descriptions ("QL" :after t)
@@ -143,7 +150,7 @@ There is a weirdness here which is worth noting: `define-module-path-description
 `define-module-path-descriptions` uses a function called `add-module-path-descriptions` to do most of its work.  You'll need to look at the source to what it does.
 
 ### Providing modules
-As an interface to `install-providers`, below, there is a function called `provide-module`: it does exactly what `provide` does (it relies on `provide` to do the work) but also maintains an alist, `*module-providers*` which maps from module names to the files that provided them (from `*load-truename*`).
+As an interface to `install-providers`, below, there is a function called **`provide-module`**: it does exactly what `provide` does (it relies on `provide` to do the work) but also maintains an alist, **`*module-providers*`** which maps from module names to the files that provided them (from `*load-truename*`).
 
 ### Other functionality
 There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.
@@ -241,10 +248,13 @@ Found /Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.64xf
 
 This second example is betraying the fact that I'm on a Mac: the mac's filesystem is case-insensitive / case-preserving, so the file is being found with an uppercase filename, when its name is 'really' lowercase.
 
+### Notes
+`require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild logical pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations.
+
 ## Installing modules automagically: `install-providers`
 I now use makefiles to install my personal CL modules and systems, and either ASDF or the LispWorks system definition tool to build them once installed[^6].  Previously I used an ancestor of this code.  It lives in the `org.tfeb.tools.install-providers` package and will add `:org.tfeb.tools.install-providers` to `*modules*`.
 
-`install-providers` will install a set of modules from the files they were originally loaded from into a directory tree under a specified root.  It has one argument which is the root under which to install things.  The remaining keyword arguments are:
+**`install-providers`** will install a set of modules from the files they were originally loaded from into a directory tree under a specified root.  It has one argument which is the root under which to install things.  The remaining keyword arguments are:
 
 - `providers` is an alist of `(module-name . providing-file)` which tells it what to install, the default being `*module-providers*` from `require-module`;
 - `really` says to really copy the files, the default is `nil` in which case it will just tell you what it would do;
