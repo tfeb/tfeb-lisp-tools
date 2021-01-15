@@ -1,4 +1,4 @@
-# TFEB.org tools
+# TFEB.ORG tools
 This system will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Currently only two are published here:
 
 - `require-module` provides variants of `require` which will search for modules, as well as the mechanisms to control the search, and also a variant of `provide` which keeps records of the file which provided a module;
@@ -288,6 +288,10 @@ Would
    to /tmp/org/tfeb/tools/require-module.64xfasl
 nil
 ```
+
+----
+
+The TFEB.ORG tools are copyright 2002, 2012, 2020-2021 Tim Bradshaw.  See `LICENSE` for the license.
 
 ----
 

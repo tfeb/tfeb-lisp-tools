@@ -5,10 +5,10 @@
 
 (defsystem "org.tfeb.tools"
   :description "TFEB tools"
-  :version "1.0.0"
+  :version "1.0.0-prerelease.1"
   :author "Tim Bradshaw"
   :licence "MIT"
-  :homepage "https://github.com/tfeb/tools"
+  :homepage "https://github.com/tfeb/tfeb-lisp-tools"
   :components
   ((:file "require-module")
    (:file "install-providers" :depends-on ("require-module"))
