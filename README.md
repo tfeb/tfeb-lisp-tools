@@ -1,5 +1,5 @@
 # TFEB.ORG tools
-This system will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Currently only two are published here:
+This repo contains a system which will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Currently only two are published here:
 
 - `require-module` provides variants of `require` which will search for modules, as well as the mechanisms to control the search, and also a variant of `provide` which keeps records of the file which provided a module;
 - `install-providers` makes use of the records of module providers kept by `require-module` in order to copy them to places they will be found.
