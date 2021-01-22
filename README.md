@@ -22,6 +22,8 @@ This naming convention ensures uniqueness of things like package names.  It does
 
 Nothing actually cares that names correspond to real DNS domains: some things do care that the namespace is hierarchically structured and big-endian.
 
+----
+
 ## Requiring modules with searching: `require-module`
 Although CL now has competent tools for defining and distributing 'systems' of code, in the form of [ASDF](https://common-lisp.net/project/asdf/ "ASDF") and particularly [Quicklisp](https://www.quicklisp.org/ "Quicklisp"), not all bits of code are large enough to justify their use.  In particular it's in the nature of the incremental and  exploratory programming style encouraged by CL that people[^2] tend to write a bunch of little tools and utilities, living in single source files, which help them get their work done and which they reuse over time.  Some of these may be portable, some not, and many of them can be quite small: a tool I use very often is under 50 lines excluding noise, but including docstrings and comments, and I have had smaller ones.
 
@@ -152,8 +154,21 @@ There is a weirdness here which is worth noting: `define-module-path-description
 ### Providing modules
 As an interface to `install-providers`, below, there is a function called **`provide-module`**: it does exactly what `provide` does (it relies on `provide` to do the work) but also maintains an alist, **`*module-providers*`** which maps from module names to the files that provided them (from `*load-truename*`).
 
+### Running code after a module is provided
+**`after-require-module`** is a macro which can be used in a module, to arrange for the forms in its body to be run after the module has been provided.  The forms are wrapped in a block also called `after-require-module`.   This can be used any number of times, and if the module is being loaded some other way it will simply do nothing.  For example:
+
+```lisp
+(defun interface (...)
+  ...)
+
+...
+
+(after-require-module
+  (register-interface #'interface))
+```
+
 ### Other functionality
-There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.
+There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-provide-module`, above.
 
 ### Examples
 Given

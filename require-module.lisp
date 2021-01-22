@@ -12,6 +12,7 @@
    #:remove-require-module-wrapper
    #:require-module
    #:require-modules
+   #:after-require-module
    #:*module-providers*
    #:provide-module))
 
@@ -426,6 +427,44 @@
   ;; returned by REQUIRE-MODULE for each module
   (loop for m in ms
         collect (multiple-value-list (apply #'require-module m keywords))))
+
+;;; Hooks which can be run after modules are required
+;;;
+
+(defvar *after-require-module-hooks*
+  ;; Hooks run after a module is loaded (will be backwards)
+ '())
+
+(defvar *in-require-module*
+  ;; Are we being required?
+  nil)
+
+(defmacro after-require-module (&body forms)
+  "Run FORMS after this module is provided
+
+A block called AFTER-REQUIRE-MODULE is wrapped around them."
+  `(progn
+     (when *in-require-module*
+       (push (lambda ()
+               (block after-require-module
+                 ,@forms))
+             *after-require-module-hooks*))
+     (values)))
+
+(define-require-module-wrapper after-require-module
+    (next &rest ignored
+          &key (run-after-hooks t) &allow-other-keys)
+    (declare (ignore ignored))
+  (let ((*after-require-module-hooks* '())
+        (*in-require-module* t))
+    (multiple-value-prog1
+        (next)
+      (when run-after-hooks
+        (dolist (f (nreverse *after-require-module-hooks*))
+          (funcall f))))))
+
+;;; Module provider recording
+;;;
 
 (defvar *module-providers*
   ;; an alist of (module . provider) added to by PROVIDE-MODULE
