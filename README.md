@@ -1,4 +1,4 @@
-# TFEB.ORG Lisp tools
+# [TFEB.ORG Lisp tools](https://https://github.com/tfeb/tfeb-lisp-tools "TFEB.ORG Lisp tools")
 This repo contains a system which will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Currently only two are published here:
 
 - `require-module` provides variants of `require` which will search for modules, as well as the mechanisms to control the search, and also a variant of `provide` which keeps records of the file which provided a module;
@@ -168,7 +168,7 @@ As an interface to `install-providers`, below, there is a function called **`pro
 ```
 
 ### Other functionality
-There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-provide-module`, above.
+There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-require-module`, above.
 
 ### Examples
 Given
