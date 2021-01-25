@@ -301,16 +301,19 @@
 
 (defvar *require-module-wrappers*
   ;; A list of (name . function) where the functions wrapped around a
-  ;; module being required.  Each function must take at least one
-  ;; argument which is a function of no arguments: it should call this
-  ;; function to do the work of requiring the module and return its
-  ;; value.  See DEFINE-MODULE-WRAPPER.  Additional arguments are
+  ;; module being required.  Each function must take at least two
+  ;; arguments.  The first is a function of no arguments: it should
+  ;; call this function to do the work of requiring the module and
+  ;; return its value.  The second is the name of the module being
+  ;; required. See DEFINE-MODULE-WRAPPER.  Additional arguments are
   ;; passed from REQUIRE-MODULE and should therefore probably be
   ;; optional.
   '())
 
-(defmacro define-require-module-wrapper (name (next . args) &body decls/forms)
-  ;; Define or redefine a named module wrapper.
+(defmacro define-require-module-wrapper (name (next module . args)
+                                              &body decls/forms)
+  ;; Define or redefine a named module wrapper.  I don't like it that
+  ;; the first argument is entirely magic.
   (let ((next-fn (make-symbol (concatenate 'string (symbol-name name) "-NEXT"))))
     (multiple-value-bind (decls forms)
         (loop for tail on decls/forms
@@ -321,7 +324,7 @@
       `(progn
          (setf (cdr (or (assoc ',name *require-module-wrappers*)
                         (car (push '(,name) *require-module-wrappers*))))
-               (lambda (,next-fn ,@args)
+               (lambda (,next-fn ,module ,@args)
                  ,@decls
                  (block ,name
                    (flet ((,next () (funcall ,next-fn)))
@@ -339,14 +342,13 @@
     nil))
 
 #+LispWorks
-(define-require-module-wrapper forget-lw-systems (next
-                                                  &rest ignored
+(define-require-module-wrapper forget-lw-systems (next module
                                                   &key (forget-systems t)
                                                   &allow-other-keys)
   ;; A wrapper which will forget LW systems.  This is here both as an
   ;; example, and because it needs to be here before the very first
   ;; module is required if that module is an LW system.
-  (declare (ignore ignored))
+  (declare (ignore module))
   (if forget-systems
       (let ((systems (scm:all-systems)))
         (unwind-protect
@@ -387,12 +389,16 @@
             (error "No location found for ~S" m)
           (return-from require-module (values nil nil))))
       (if (not pretend)
-          (let ((wrapper-arguments (loop for (k v . more) = keywords then more
-                                         unless (member k '(:verbose :test
-                                                            :pretend :compile
-                                                            :error))
-                                         collect k and collect v
-                                         until (null more))))
+          (let ((wrapper-arguments
+                 (if (not (null keywords))
+                     (loop for (k v . more) = keywords then more
+                           unless (member k '(:verbose :test
+                                              :pretend :compile
+                                              :error
+                                              :module-path-descriptions))
+                           collect k and collect v
+                           until (null more))
+                   '())))
             (labels
                 ((wrapping-require (wtail)
                    (if (null wtail)
@@ -417,6 +423,7 @@
                        (apply (cdr (first wtail))
                               (lambda ()
                                 (wrapping-require (rest wtail)))
+                              m
                               wrapper-arguments)))))
               (wrapping-require *require-module-wrappers*)))
         (format t "~&Would load ~S from ~A" m location))
@@ -452,9 +459,9 @@ A block called AFTER-REQUIRE-MODULE is wrapped around them."
      (values)))
 
 (define-require-module-wrapper after-require-module
-    (next &rest ignored
+    (next module
           &key (run-after-hooks t) &allow-other-keys)
-    (declare (ignore ignored))
+    (declare (ignore module))
   (let ((*after-require-module-hooks* '())
         (*in-require-module* t))
     (multiple-value-prog1
