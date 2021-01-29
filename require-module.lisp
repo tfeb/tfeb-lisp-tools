@@ -154,9 +154,8 @@
   ;;
   (when verbose
     (format t "~&Looking for module ~S~%" module-name))
-  (let* ((name (etypecase module-name
-                 (string module-name)
-                 (symbol (symbol-name module-name))))
+  (check-type module-name (or symbol string) "a symbol or string")
+  (let* ((name (string module-name))
          (nlist (if (find #\. name)
                     (loop with len = (length name)
                           for c upfrom 0
@@ -193,7 +192,7 @@
                                            cp
                                          (progn
                                            (warn
-                                            "Loader source ~A is newer than bin ~A, loading source"
+                                            "Source ~A is newer than bin ~A, using source"
                                             p cp)
                                            p))))
                                   (when verbose
@@ -369,15 +368,18 @@
                          (verbose nil)
                          (test #'string=)
                          (pretend nil)
+                         (force nil)
                          (compile nil)
                          (error t)
                          (module-path-descriptions *module-path-descriptions*)
                          &allow-other-keys)
   ;; Require a module, using LOCATE-MODULE to find it and invoking any
   ;; wrappers.
-  (if (member (etypecase m
-                (string m)
-                (symbol (symbol-name m)))
+  (check-type m (or symbol string) "a symbol or string")
+  (when force
+    ;; This is horrible but it avoids having to second-guess REQUIRE
+    (setf *modules* (remove (string m) *modules* :test test)))
+  (if (member (string m)
               *modules*
               :test test)
       (values m nil)
@@ -393,7 +395,8 @@
                  (if (not (null keywords))
                      (loop for (k v . more) = keywords then more
                            unless (member k '(:verbose :test
-                                              :pretend :compile
+                                              :pretend :force
+                                              :compile
                                               :error
                                               :module-path-descriptions))
                            collect k and collect v
@@ -405,17 +408,16 @@
                        (let ((effective-location
                               (if compile
                                   (let ((cf (compile-file-pathname location)))
-                                    (when (not (equal cf location))
-                                      (compile-file location
-                                                    :output-file cf
-                                                    :verbose verbose
-                                                    :print verbose))
-                                    cf)
+                                    (if (not (equal (pathname-type location)
+                                                    (pathname-type cf)))
+                                        (compile-file location
+                                                      :verbose verbose)
+                                      location))
                                 location)))
                          (when verbose
                            (format t "~&Loading ~S from ~A"
                                    m effective-location))
-                         (require m effective-location))
+                         (require m (list effective-location)))
                      (progn
                        (when verbose
                          (format t

@@ -87,6 +87,7 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 - `verbose` will cause it to tell you what it's doing, default `nil`;
 - `test` specifies the comparison function to use for module names, by default `#'string=` which is the right default;
 - `pretend` will cause it not to actually require the module, default `nil`;
+- `force` will cause it to forcibly require the module (by removing it from `*modules*`as the first step), default `nil`;
 - `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`;
 - `error` means that failure to require a module is an error, default `t`;
 - `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`.
@@ -99,7 +100,7 @@ Other keyword arguments are allowed which are passed to possible wrapper functio
 - its first argument and `nil` if the module was already loaded (no search is done in this case);
 - `nil` and `nil` if `error` is `nil` and the module was not found.
 
-`require-module` relies on `require` to do the actual work of loading the file and maintaining `*modules*`.  It will only search (and thus only call `require` on the results of the search) if the module is not already present on `*modules*`.
+`require-module` relies on `require` to do the actual work of loading the file and most of the work of maintaining `*modules*`.  It will only search (and thus only call `require` on the results of the search) if the module is not already present on `*modules*`, either because it was not there before the call or because it's just removed it due to the `force` option.
 
 **`locate-module`** locates a module: it's what `require-module` uses.  It has one mandatory argument which is the module name, and two keyword arguments:
 
@@ -265,6 +266,8 @@ This second example is betraying the fact that I'm on a Mac: the mac's filesyste
 
 ### Notes
 `require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild logical pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations.
+
+All of the functions accept strings or symbols as module names: they'll complain about anything else rather than blindly calling `string`.
 
 ## Installing modules automagically: `install-providers`
 I now use makefiles to install my personal CL modules and systems, and either ASDF or the LispWorks system definition tool to build them once installed[^6].  Previously I used an ancestor of this code.  It lives in the `org.tfeb.tools.install-providers` package and will add `:org.tfeb.tools.install-providers` to `*modules*`.
