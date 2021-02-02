@@ -12,9 +12,12 @@
    #:remove-require-module-wrapper
    #:require-module
    #:require-modules
+   #:requires
+   #:needs
    #:after-require-module
    #:*module-providers*
-   #:provide-module))
+   #:provide-module
+   #:provides))
 
 (in-package :org.tfeb.tools.require-module)
 
@@ -364,15 +367,16 @@
       (warn
        "COMPILE-FILE-PATHNAME is not idempotent: dynamic compilation may fail"))))
 
-(defun require-module (m &rest keywords &key
+(defun require-module (m &key
                          (verbose nil)
                          (test #'string=)
                          (pretend nil)
                          (force nil)
                          (compile nil)
                          (error t)
+                         (fallback nil)
                          (module-path-descriptions *module-path-descriptions*)
-                         &allow-other-keys)
+                         (wrapper-arguments '()))
   ;; Require a module, using LOCATE-MODULE to find it and invoking any
   ;; wrappers.
   (check-type m (or symbol string) "a symbol or string")
@@ -383,25 +387,14 @@
               *modules*
               :test test)
       (values m nil)
-    (let ((location (locate-module m
-                                   :module-path-descriptions module-path-descriptions
-                                   :verbose verbose)))
-      (unless location
-        (if error
-            (error "No location found for ~S" m)
-          (return-from require-module (values nil nil))))
-      (if (not pretend)
-          (let ((wrapper-arguments
-                 (if (not (null keywords))
-                     (loop for (k v . more) = keywords then more
-                           unless (member k '(:verbose :test
-                                              :pretend :force
-                                              :compile
-                                              :error
-                                              :module-path-descriptions))
-                           collect k and collect v
-                           until (null more))
-                   '())))
+      (let ((location (locate-module
+                       m
+                       :module-path-descriptions module-path-descriptions
+                       :verbose verbose)))
+      (cond
+       (location
+        ;; found a location
+        (if (not pretend)
             (labels
                 ((wrapping-require (wtail)
                    (if (null wtail)
@@ -427,15 +420,42 @@
                                 (wrapping-require (rest wtail)))
                               m
                               wrapper-arguments)))))
-              (wrapping-require *require-module-wrappers*)))
-        (format t "~&Would load ~S from ~A" m location))
-      (values m t))))
+              (wrapping-require *require-module-wrappers*))
+          (format t "~&Would load ~S from ~A" m location))
+        (values m t))
+       (fallback
+        ;; No location but there's a fallback: just call it, and assum
+        ;; it loaded the module
+        (values (funcall fallback m) t))
+       (error
+        ;; Signal an error
+        (error "No location found for ~S" m))
+       (t
+        ;; No error, just fail
+        (values nil nil))))))
 
-(defun require-modules (ms &rest keywords &key &allow-other-keys)
-  ;; Require a list of modules.  Return a list of list of the values
-  ;; returned by REQUIRE-MODULE for each module
-  (loop for m in ms
-        collect (multiple-value-list (apply #'require-module m keywords))))
+(defun require-modules (module-specifications
+                        &rest keywords &key &allow-other-keys)
+  ;; Require a list of module specifications.  Return a list of list
+  ;; of the values returned by REQUIRE-MODULE for each module.  A
+  ;; module specification is either the name of a module or a cons of
+  ;; (module name . keyword-arguments)
+  (loop for m in module-specifications
+        collect (multiple-value-list
+                 (if (atom m)
+                     (apply #'require-module m keywords)
+                   (apply #'require-module (first m)
+                          (append (rest m) keywords))))))
+
+(defun requires (&rest module-specifications)
+  ;; NOSPREAD version of require-modules, with a fallback to REQUIRE
+  (require-modules module-specifications :fallback #'require))
+
+(defmacro needs (&rest module-specifications)
+  ;; What do we need?  Things we need are always needed.
+  ;; Note this doesn't quote its arguments
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (requires ,@module-specifications)))
 
 ;;; Hooks which can be run after modules are required
 ;;;
@@ -489,9 +509,15 @@ A block called AFTER-REQUIRE-MODULE is wrapped around them."
                                   *module-providers*)))))
         (setf (cdr entry) provider)))))
 
+(defun provides (&rest module-names)
+  ;; Counterpart to NEEDS: modules aren't provided until the file is
+  ;; loaded however
+  (dolist (m module-names module-names)
+    (provide-module m)))
+
 ;;; Bootstrap
 ;;;
 
-(provide-module :org.tfeb.tools.require-module)
+(provides :org.tfeb.tools.require-module)
 
 (pushnew ':org.tfeb.tools.require-module *features*) ;help init files

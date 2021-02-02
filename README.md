@@ -89,16 +89,19 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 - `pretend` will cause it not to actually require the module, default `nil`;
 - `force` will cause it to forcibly require the module (by removing it from `*modules*`as the first step), default `nil`;
 - `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`;
+- `fallback` , if non-`nil`, should be a fallback function which will be be used to try to require a module if no location for it can be found, default `nil`;
 - `error` means that failure to require a module is an error, default `t`;
-- `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`.
+- `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`;
+- `wrapper-arguments` is a list of keyword arguments passed to wrappers, default `'()`;
 
-Other keyword arguments are allowed which are passed to possible wrapper functions, not described here (see the source).
+Wrappers are not yet documented.
 
 `require-module` returns:
 
 - its first argument and `t` if the module was loaded;
 - its first argument and `nil` if the module was already loaded (no search is done in this case);
-- `nil` and `nil` if `error` is `nil` and the module was not found.
+- the first value returned by the `fallback` function and `t` if it is given and no location was found;
+- `nil` and `nil` if there is no fallback, `error` is `nil` and the module was not found.
 
 `require-module` relies on `require` to do the actual work of loading the file and most of the work of maintaining `*modules*`.  It will only search (and thus only call `require` on the results of the search) if the module is not already present on `*modules*`, either because it was not there before the call or because it's just removed it due to the `force` option.
 
@@ -109,7 +112,16 @@ Other keyword arguments are allowed which are passed to possible wrapper functio
 
 It returns the file it found, or `nil` if it didn't find anything.
 
-**`require-modules`** is a tiny shim around `require-module` which expects a list of module names instead of one.  All the other arguments are the same.  It returns a list of lists of the two values returned by each `require-module` it calls.
+**`require-modules`** is a shim around `require-module` which expects a list of module descriptions instead of a module name.  It takes all the same keyword arguments as `require-module`.  A *module description* is either
+
+- a module name;
+- or a cons of a module name and some arguments to `require-modules`.
+
+In the second case `require-module` is called with the two sets of arguments appended to each other, with those from the module specification first.  Because CL uses the first of any repeated keyword arguments, this means that individual module specifications can override the keyword arguments provided to the function as a whole.  `require-modules` returns a list of lists of the two values returned by each `require-module` it calls.
+
+**`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`: `(requires x y)` is `(require-modules (list x y) :fallback #'require)`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
+
+**`needs`**  lets you express a dependency on modules at compile time: it is just `requires` wrapped in a suitable `eval-when`.  Note that `needs` does not quote its arguments: it really is like `requires` as far as it can be.
 
 ### The search list
 The list of path descriptions is **`*module-path-descriptions*`**.  Each entry in this list isa *path description*, which is one of:
@@ -155,6 +167,8 @@ There is a weirdness here which is worth noting: `define-module-path-description
 ### Providing modules
 As an interface to `install-providers`, below, there is a function called **`provide-module`**: it does exactly what `provide` does (it relies on `provide` to do the work) but also maintains an alist, **`*module-providers*`** which maps from module names to the files that provided them (from `*load-truename*`).
 
+Additionally, **`provides`** is a counterpart to `requires` and `needs`:  it lets you state what module or modules a given file provides.  Unlike `needs` it's not a macro because modules should not be provided until they are loaded.
+
 ### Running code after a module is provided
 **`after-require-module`** is a macro which can be used in a module, to arrange for the forms in its body to be run after the module has been provided.  The forms are wrapped in a block also called `after-require-module`.   This can be used any number of times, and if the module is being loaded some other way it will simply do nothing.  For example:
 
@@ -167,6 +181,8 @@ As an interface to `install-providers`, below, there is a function called **`pro
 (after-require-module
   (register-interface #'interface))
 ```
+
+This is particularly useful for modules consisting of several files (with a 'loader' file to load them all): the forms given in `after-require-module` are run after the whole module is loaded.
 
 ### Other functionality
 There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-require-module`, above.
