@@ -117,7 +117,7 @@
 
 (defun locate-module (module-name &key (module-path-descriptions
                                         *module-path-descriptions*)
-                                  (verbose nil))
+                                  (verbose nil) (quiet nil))
   ;; MODULE-NAME is a string or symbol, maybe with . chars in.  This
   ;; function encodes the search order, which is hairy but basically
   ;; as follows (this is just a sample).
@@ -194,9 +194,10 @@
                                        (if (> cpt pt)
                                            cp
                                          (progn
-                                           (warn
-                                            "Source ~A is newer than bin ~A, using source"
-                                            p cp)
+                                           (unless quiet
+                                             (warn
+                                              "Source ~A is newer than bin ~A, using source"
+                                              p cp))
                                            p))))
                                   (when verbose
                                     (format t "~&Found ~A~%" got))
@@ -360,6 +361,18 @@
             (lw:delete-system new))))
     (next)))
 
+(defun maybe-use-module-package (m &key (use nil) (verbose nil) (quiet nil))
+  (when use
+    (let ((p (find-package m)))
+      (if p
+          (let ((pn (package-name p)))
+            (when verbose
+              (format t "~&Using package ~S~:[ (~S)~;~*~]"
+                      m (string= (string m) pn) pn))
+            (use-package p))
+        (unless quiet
+          (warn "No package for ~S" m))))))
+
 (eval-when (:compile-toplevel)
   ;; I am not sure this has to be true, although I expect it is
   (let ((c (compile-file-pathname *compile-file-pathname*)))
@@ -369,12 +382,14 @@
 
 (defun require-module (m &key
                          (verbose nil)
+                         (quiet nil)
                          (test #'string=)
                          (pretend nil)
                          (force nil)
                          (compile nil)
-                         (error t)
+                         (use nil)
                          (fallback nil)
+                         (error t)
                          (module-path-descriptions *module-path-descriptions*)
                          (wrapper-arguments '()))
   ;; Require a module, using LOCATE-MODULE to find it and invoking any
@@ -386,11 +401,17 @@
   (if (member (string m)
               *modules*
               :test test)
-      (values m nil)
+      (progn
+        (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
+        (values m nil))
       (let ((location (locate-module
                        m
                        :module-path-descriptions module-path-descriptions
-                       :verbose verbose)))
+                       :verbose verbose :quiet (or compile quiet)))
+            (*load-verbose* verbose)
+            (*load-print* verbose)
+            (*compile-verbose* verbose)
+            (*compile-print* verbose))
       (cond
        (location
         ;; found a location
@@ -403,14 +424,15 @@
                                   (let ((cf (compile-file-pathname location)))
                                     (if (not (equal (pathname-type location)
                                                     (pathname-type cf)))
-                                        (compile-file location
-                                                      :verbose verbose)
+                                        (compile-file location)
                                       location))
                                 location)))
                          (when verbose
                            (format t "~&Loading ~S from ~A"
                                    m effective-location))
-                         (require m (list effective-location)))
+                         (require m (list effective-location))
+                         (maybe-use-module-package
+                          m :use use :verbose verbose :quiet quiet))
                      (progn
                        (when verbose
                          (format t
@@ -424,9 +446,13 @@
           (format t "~&Would load ~S from ~A" m location))
         (values m t))
        (fallback
-        ;; No location but there's a fallback: just call it, and assum
-        ;; it loaded the module
-        (values (funcall fallback m) t))
+        ;; No location but there's a fallback: just call it, and
+        ;; assume it loaded the module
+        (when verbose
+          (format t "~&Trying fallback for ~S" m))
+        (let ((result (funcall fallback m)))
+          (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
+          (values result t)))
        (error
         ;; Signal an error
         (error "No location found for ~S" m))
@@ -453,9 +479,10 @@
 
 (defmacro needs (&rest module-specifications)
   ;; What do we need?  Things we need are always needed.
-  ;; Note this doesn't quote its arguments
+  ;; Note this quotes its arguments, which is an incompatible change
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (requires ,@module-specifications)))
+     (requires ,@(loop for m in module-specifications
+                       collect `',m))))
 
 ;;; Hooks which can be run after modules are required
 ;;;

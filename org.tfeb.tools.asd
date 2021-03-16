@@ -5,7 +5,7 @@
 
 (defsystem "org.tfeb.tools"
   :description "TFEB tools"
-  :version "2.0.0"
+  :version "3.0.0"
   :author "Tim Bradshaw"
   :licence "MIT"
   :homepage "https://github.com/tfeb/tfeb-lisp-tools"

@@ -85,10 +85,12 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 **`require-module`** will search for and `require` modules.  It has one mandatory argument which is the module name, and a number of keyword arguments:
 
 - `verbose` will cause it to tell you what it's doing, default `nil`;
+- `quiet` will cause some warnings not to happen (`quiet` and `verbose` can both be true), default `nil`;
 - `test` specifies the comparison function to use for module names, by default `#'string=` which is the right default;
 - `pretend` will cause it not to actually require the module, default `nil`;
 - `force` will cause it to forcibly require the module (by removing it from `*modules*`as the first step), default `nil`;
 - `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`;
+- `use`will cause it to use a package with the same name as the module after it is loaded if it exists, default `nil`;
 - `fallback` , if non-`nil`, should be a fallback function which will be be used to try to require a module if no location for it can be found, default `nil`;
 - `error` means that failure to require a module is an error, default `t`;
 - `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`;
@@ -105,12 +107,22 @@ Wrappers are not yet documented.
 
 `require-module` relies on `require` to do the actual work of loading the file and most of the work of maintaining `*modules*`.  It will only search (and thus only call `require` on the results of the search) if the module is not already present on `*modules*`, either because it was not there before the call or because it's just removed it due to the `force` option.
 
+It is not an error if a module doesn't define a package with its own name when the `use` option is given, but there will be a warning unless `quiet` is also given.
+
 **`locate-module`** locates a module: it's what `require-module` uses.  It has one mandatory argument which is the module name, and two keyword arguments:
 
 - `verbose` makes it say what it's doing, default `nil`;
+- `quiet` which will suppress some warnings, default `nil`;
 - `module-path-descriptions`is the list of module path-descriptions, default `*module-path-descriptions*`.
 
-It returns the file it found, or `nil` if it didn't find anything.
+`locate-module` will return:
+
+- a compiled file name if there is a compiled file corresponding to the source file it located (by `compile-file-pathname`) and it is not older than the source file;
+- a source file name if there is no compiled file;
+- a source file name if there is a compiled file but it is older than the source file, in which case there will be a warning about this unless `quiet` is given;
+- `nil` if it didn't find anything (this is not an error).
+
+The reason for this behaviour is that the file located is often a tiny 'loader' shim which never gets compiled[^6], so in this case there's nothing wrong if there is no compiled file.  If there is a compiled file but it is out of date it's best to return the source file: it's current, and anything that calls `locate-module` can choose to compile the file before loading, which is something `require-module` can do.
 
 **`require-modules`** is a shim around `require-module` which expects a list of module descriptions instead of a module name.  It takes all the same keyword arguments as `require-module`.  A *module description* is either
 
@@ -121,7 +133,7 @@ In the second case `require-module` is called with the two sets of arguments app
 
 **`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`: `(requires x y)` is `(require-modules (list x y) :fallback #'require)`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
 
-**`needs`**  lets you express a dependency on modules at compile time: it is just `requires` wrapped in a suitable `eval-when`.  Note that `needs` does not quote its arguments: it really is like `requires` as far as it can be.
+**`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^7].
 
 ### The search list
 The list of path descriptions is **`*module-path-descriptions*`**.  Each entry in this list isa *path description*, which is one of:
@@ -285,8 +297,10 @@ This second example is betraying the fact that I'm on a Mac: the mac's filesyste
 
 All of the functions accept strings or symbols as module names: they'll complain about anything else rather than blindly calling `string`.
 
+`needs` has changed incompatibly so it now quotes its arguments.
+
 ## Installing modules automagically: `install-providers`
-I now use makefiles to install my personal CL modules and systems, and either ASDF or the LispWorks system definition tool to build them once installed[^6].  Previously I used an ancestor of this code.  It lives in the `org.tfeb.tools.install-providers` package and will add `:org.tfeb.tools.install-providers` to `*modules*`.
+I now use makefiles to install my personal CL modules and systems, and either ASDF or the LispWorks system definition tool to build them once installed[^8].  Previously I used an ancestor of this code.  It lives in the `org.tfeb.tools.install-providers` package and will add `:org.tfeb.tools.install-providers` to `*modules*`.
 
 **`install-providers`** will install a set of modules from the files they were originally loaded from into a directory tree under a specified root.  It has one argument which is the root under which to install things.  The remaining keyword arguments are:
 
@@ -339,4 +353,8 @@ The TFEB.ORG tools are copyright 2002, 2012, 2020-2021 Tim Bradshaw.  See `LICEN
 
 [^5]:	Note that, here and below, I am writing pathnames as strings.  This is just because I am being lazy: the system works in terms of pathnames, not strings.
 
-[^6]:	A key to making this work with ASDF is to turn off output translations and keep the compiled files alongside their sources.
+[^6]:	And, in fact, such loader shims often *can't* be compiled as they rely on things changing during the load of their source.
+
+[^7]:	It's hard to see a case where having `needs` *not* quote its arguments is useful since whatever values it uses would need to be available at compile-time anyway, which means you'd already almost certainly have to use `eval-when`.  In any case, if you want what `needs` does without the autoquoting, you should now use `(eval-when (...) (requires ...))`.
+
+[^8]:	A key to making this work with ASDF is to turn off output translations and keep the compiled files alongside their sources.
