@@ -136,15 +136,16 @@ In the second case `require-module` is called with the two sets of arguments app
 **`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^7].
 
 ### The search list
-The list of path descriptions is **`*module-path-descriptions*`**.  Each entry in this list isa *path description*, which is one of:
+The list of path descriptions is **`*module-path-descriptions*`**.  Each entry in this list is a *path description*, which is one of:
 
 - a list, which should consist of suitable arguments to `make-pathname`;
-- a function of no arguments – the function is called and it should return something suitable to be an element of the searchlist (this process is iterated: if the function returns a function then that will be called in turn);
-- something else, which should be a pathname designator (probably either a list of a string) which is handed to `pathname` to turn into a pathname.
+- a designator for a function of no arguments – the function is called and it should return something suitable to be an element of the searchlist (this process is iterated: if the function returns a function then that will be called in turn);
+- `nil` which is ignored (this is useful so a function can return `nil` as a way of declining to provide a useful value;
+-  something else, which should be a pathname designator (probably either a list of a string) which is handed to `pathname` to turn into a pathname.
 
 The initial value of `*module-path-descriptions*` is `()`.
 
-It is perfectly possible to maintain `*module-path-descriptions*` manually, and that's how it worked for a long time.  There is now a macro which makes this a little easier, perhaps.
+It is perfectly possible to maintain `*module-path-descriptions*` manually, and that's how it worked for a long time.  There is now a macro which makes this a little easier, perhaps, and a utility which helps with entries which are functions.
 
 **`define-module-path-descriptions`** defines module path descriptions.  It does this for a particular host (this is one of the reasons logical pathnames are useful), and there are a bunch of options: the most simple ones control whether to add the descriptions before or after the existing ones, and whether to replace existing descriptions for the same host.  Rather than describe it in detail here are a couple of examples (yes, this is copping out);
 
@@ -170,11 +171,33 @@ This will add a bunch of pathname descriptions for a logical host named `"QL` an
                      :defaults (pathname (sb-posix:getcwd)))))
 ```
 
-This is from my SBCL init file, where it is the first thing that adds to `*module-path-descriptions*`.  The `"-"` host doesn't exist: it's just there because the macro needs something to be there.  Each form in the body is a function which will return a pathname based on the current directory, which means that subdirectories of the current directory get searched first.
+This is what my SBCL init file looked like before `module-path-descriptions-for-function` exists, where it was the first thing that adds to `*module-path-descriptions*`.  The `"-"` host doesn't exist: it's just there because the macro needs something to be there.  Each form in the body is a function which will return a pathname based on the current directory, which means that subdirectories of the current directory get searched first.
 
 There is a weirdness here which is worth noting: `define-module-path-descriptions` doesn't normally evaluate the forms in its body.  But it *does* arrange for them to be evaluated if they are lists whose first element is `lambda`, which is why the above works.  This is a horrible hack.
 
-`define-module-path-descriptions` uses a function called `add-module-path-descriptions` to do most of its work.  You'll need to look at the source to what it does.
+`define-module-path-descriptions` uses an (exported) function called `add-module-path-descriptions` to do most of its work.  You'll need to look at the source to what it does.
+
+**`module-path-descriptions-for-function`** is a function which takes two arguments and returns a list of functions suitable for entries in `*module-path-descriptions*`.  Its arguments are:
+
+- a designator for a function of no arguments which should return either a pathname or `nil`;
+- a list of pathname specs, which are either pathname designators or partial lists of arguments to `make-pathname`.
+
+For each pathname spec this will return a a functiony path description which calls the function, and if does not return `nil` then merges either the result of a suitable `make-pathname` call (for a listy pathname spec) or a call to `pathname` (for any other pathname spec) with its result.  If the function returns NIL just return NIL.
+
+A good example of how to use this function is to provide searching depending on the current file being loaded or compiled:
+
+```lisp
+(setf *module-path-descriptions*
+      (append *module-path-descriptions*
+              (module-path-descriptions-for-function
+               (lambda ()
+                 (or *load-pathname* *compile-file-pathname*))
+               '((:name "*-loader" :type "lisp")
+                 (:name "loader" :type "lisp")
+                 (:name "*" :type "lisp")))))
+```
+
+You can't (easily) use this function with `define-module-path-descriptions`: you need to use it as above.  Note that the function will get called for each pathname spec.
 
 ### Providing modules
 As an interface to `install-providers`, below, there is a function called **`provide-module`**: it does exactly what `provide` does (it relies on `provide` to do the work) but also maintains an alist, **`*module-providers*`** which maps from module names to the files that provided them (from `*load-truename*`).
@@ -291,6 +314,17 @@ Found /Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.64xf
 ```
 
 This second example is betraying the fact that I'm on a Mac: the mac's filesystem is case-insensitive / case-preserving, so the file is being found with an uppercase filename, when its name is 'really' lowercase.
+
+### A nice trick
+If you have Quicklisp, this works:
+
+```lisp
+(needs
+ (:org.tfeb.hax.collecting)
+ (:cl-ppcre :fallback ql:quickload))
+```
+
+Which means you can write small programs which rely on Quicklisp to fetch and load things without either an ASDF system definition, or a bunch of explicit `eval-when`s in the sources to load things at compile time.
 
 ### Notes
 `require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild logical pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations.

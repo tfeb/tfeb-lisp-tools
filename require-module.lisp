@@ -7,6 +7,7 @@
    #:*module-path-descriptions*
    #:add-module-path-descriptions
    #:define-module-path-descriptions
+   #:module-path-descriptions-for-function
    #:locate-module
    #:define-require-module-wrapper
    #:remove-require-module-wrapper
@@ -30,10 +31,12 @@
   '())
 
 (defun ensure-pathname (d)
-  ;; Ensure a pathname description is a pathname
+  ;; Ensure a pathname description is a pathname, or NIL
   (typecase d
+    (null nil)
     (list (apply #'make-pathname d))
     (function (ensure-pathname (funcall d)))
+    (symbol (ensure-pathname (funcall (symbol-function d))))
     (t (pathname d))))
 
 (defun add-module-path-descriptions (descs &key (after nil)
@@ -114,6 +117,32 @@
   "QL:LOCAL-PROJECTS;LOADER.LISP"
   "QL:LOCAL-PROJECTS;*.LISP")
 ||#
+
+(defun module-path-descriptions-for-function (function
+                                                    pathname-specs)
+  ;; For each pathname spec make a functiony path description which
+  ;; calls FUNCTION, and if does not return NIL then merges either the
+  ;; result of a suitable MAKE-PATHNAME call (for a listy pathname
+  ;; spec) or a call to PATHNAME (for any other pathname spec) with
+  ;; its result.  If the function returns NIL just return NIL.
+  (mapcar (lambda (ps)
+            (typecase ps
+              (list
+               (lambda ()
+                 (let ((p (funcall function)))
+                   (if p
+                       (merge-pathnames (apply #'make-pathname
+                                               :defaults p
+                                               ps)
+                                        p)
+                     nil))))
+              (t
+               (lambda ()
+                 (let ((p (funcall function)))
+                   (if p
+                       (merge-pathnames (pathname ps) p)
+                     nil))))))
+          pathname-specs))
 
 (defun locate-module (module-name &key (module-path-descriptions
                                         *module-path-descriptions*)
@@ -278,7 +307,15 @@
                            path
                            (mapcar #'string-upcase ndir)
                            (string-upcase nname))
-                          d))))
+                          d)))
+              (null
+               ;; This case happens if d is a function which returns
+               ;; NIL
+               nil)
+              (t
+               (warn "unexpected 'pathname' ~A (type ~S)"
+                     path (type-of path))
+               nil))
             when found do (return-from locate-module found))
       ;; Now search ignoring the dir components
       (loop for d in module-path-descriptions
@@ -297,7 +334,12 @@
                           d)
                    (probe (merge-path
                            path '() (string-upcase nname))
-                          d))))
+                          d)))
+              (null nil)
+              (t
+               (warn "unexpected 'pathname' ~A (type ~S)"
+                     path (type-of path))
+               nil))
             when found do (return-from locate-module found))
       ;; Or give up
       nil)))
