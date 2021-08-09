@@ -15,10 +15,13 @@ These tools purport to be portable Common Lisp.  If they're not that's either a 
 ### Zero history
 All of these tools have long and varied histories.  However these histories are entangled with a lot of other code which is not public, so that history is not represented in the publication repo where you are probably reading this.
 
+### Versions
+I planned to use [semantic versioning](https://semver.org/ "Semantic versioning"), where the major version number only changes on incompatible changes.  However the result of this would be that a complete new tool being added or a huge extension to an existing one would only be a minor version, which seems wrong.  So what I'm doing is to modify this: a major version means either an incompatible change, a complete new tool, or a very major extension of an existing tool.
+
 ### Naming conventions
 All of these tools make use of, and often work best with, *domain-structured names*: packages, modules, features and so on have names which start with a DNS domain name in reverse order and then may continue to divide further.  In this case the prefix is `org.tfeb.tools`: `org.tfeb` is the DNS component and `tools` is the division within the DNS part.
 
-This naming convention ensures uniqueness of things like package names.  It does make typing package-qualified names somewhat irritating: the solution is not to do that but to construct packages which import or use the symbols you need.  CL's default package system is very well up to solving this problem, rumours to the contrary notwithstanding: [conduit packages](https://github.com/tfeb/conduit-packages "conduit packages") can make it a little simpler to express what you want to do.
+This naming convention ensures uniqueness of things like package names.  It does make typing package-qualified names somewhat irritating: the solution is not to do that but to construct packages which import or use the symbols you need.  CL's default package system is very well up to solving this problem, rumours to the contrary notwithstanding: [conduit packages](https://github.com/tfeb/conduit-packages "conduit packages") can make it a little simpler to express what you want to do, and [UIOP's `define-package`](https://common-lisp.net/project/asdf/uiop.html#UIOP_002fPACKAGE "define-package") can also do something similar, I think.
 
 Nothing actually cares that names correspond to real DNS domains: some things do care that the namespace is hierarchically structured and big-endian.
 
@@ -31,10 +34,16 @@ Turning these small tools into ASDF systems[^3] either means combining them into
 
 Well, CL has `require`, `provide` and `*modules*` and although these are deprecated, they're not going away any time soon, or in fact ever.  So a reasonable approach is to make all the small tools into modules by adding suitable `provide` incantations, and then to use `require` to load them.  This still leaves the problem that `require` needs to know where to find the module being required is in the filesystem, and I didn't want to fill code with explicit pathnames, even though logical pathnames make things at least a little better.
 
-`require-module` provides a variant of `require` which has a portable mechanism for searching for and locating files corresponding to modules.  In particular it understands how to combine domain-structured module names (`org.tfeb.hax.collecting` say) with a search list of pathnames to locate a file corresponding to the name which, when loaded, should provide the module.  There are mechanisms to define what directories should be searched and in which order, and to wrap code around the process of requiring a module in the manner of CLOS around methods.  Finally it also provides a wrapper for `provide` which keeps a record of the file which provided a given module, which can be used by `install-providers` (below) to install modules where it expects them to be.
+`require-module` provides a souped-up variant of `require` which has a portable mechanism for searching for and locating files corresponding to modules.  In particular it understands how to combine domain-structured module names (`org.tfeb.hax.collecting` say) with a search list of pathnames to locate a file corresponding to the name which, when loaded, should provide the module.  There are mechanisms to define what directories should be searched and in which order, and to wrap code around the process of requiring a module in the manner of CLOS around methods.  Finally it also provides a wrapper for `provide` which keeps a record of the file which provided a given module, which can be used by `install-providers` (below) to install modules where it expects them to be.
+
+`require-module` can also take advantage of the fact that `require` never actually checks that the file or files it loads provides the module being required.  So `require-module` will happily load any file it can find, and doesn't care whether the module is provided or not.
+
+`require-module` also keeps a cache of the truenames and write dates of the files it has loaded: unless you ask to bypass the cache, files will only ever be loaded once until they are modified, no matter how many times they are required.
+
+Finally, `require-module` also keeps a structure which maps between modules it has loaded and all the descendant modules of them – modules which were loaded in the process of loading some other module – together with a note as to the file they came from.  Using this structure you can ask it to reload a module if it has changed together with any descendant modules which have changed.  This is currently experimental.
 
 ### Logical pathnames
-`require-module` doesn't need you to use logical pathnames, but it does work well with them and I have usually used it that way.  Using logical pathnames gives you two advantages:
+`require-module` doesn't need you to use logical pathnames, but it does work well with them and I have usually used it that way until recently.  Using logical pathnames gives you two advantages:
 
 - the mechanism for maintaining the search list lets you add & replace a bunch of paths for the same host, and if that's a logical host you can invent new ones, so maintenance becomes easier;
 - there is another level of translation between the names of modules and the physical pathname they come from – for instance by changing the translations of a logical host you can switch between variants of things easily.
@@ -42,18 +51,18 @@ Well, CL has `require`, `provide` and `*modules*` and although these are depreca
 In summary you don't have to use logical pathnames, but it can make things easier.
 
 ### Case
-Module names are case sensitive: `require`uses `string=` to compare them.  Depending on how you write module names this can make life a little complicated[^4].  This is made more interesting because logical pathnames are really all upper-case.  `require-module` tries to be smart about this:
+Module names are case sensitive: `require`uses `string=` to compare them.  Depending on how you write module names this can make life a little complicated[^4].  This is made more interesting because [logical pathnames are really all upper-case](https://www.lispworks.com/documentation/HyperSpec/Body/19_ca.htm "logical pathname syntax").  `require-module` tries to be smart about this:
 
 - if it is checking a logical pathname as a potential location it uppercases module names;
-- if it is checking a physical pathname then it first tries the name as it is, then downcased, then upcased.
+- if it is checking a physical pathname then it first tries the name as it is, then downcased, then upcased, where those variants differ.
 
-This typically works reasonably well: if you use module names which are symbols, are searching a physical pathname, and prefer lowercase filenames, then it will find a lowercase filename on the second try.
+This typically works reasonably well: if you use module names which are symbols, are searching a physical pathname, are using a case-sensitive filesystem and prefer lowercase filenames, then it will find a lowercase filename on the second try.
 
 ### The search algorithm
 The search process starts by splitting up a domain-structured module name into a list of strings, which it will then variously use as directory and name components for the search:
 
 - `"org.tfeb.hax"` is turned into `("org" "tfeb" "hax")`;
-- `:org.tfeb.hax` is turned into `("ORG" "TFEB" "HAX")`.
+- `:org.tfeb.hax` is turned into `("ORG" "TFEB" "HAX")` assuming standard reader settings.
 
 These lists, and parts of them, are then used as parts of pathname specifications after possible case fiddling.
 
@@ -78,25 +87,39 @@ There is a list of path specifications to search: see below for how the list is 
 7. (all the other path specifications);
 8. (equivalent desperation searches, trying downcase and upcase variants as before, a total of 6 more searches).
 
+In fact the search algorithm is cleverer than this in several ways:
+
+- if downcasing or upcasing a module name results in no change from something already probed, it is not probed again;
+- for module name has only one component (`"foo"` say) then the desperation search using the last part of the name only is omitted as a whole, as it would all duplicate the previous search;
+- finally, a table of pathnames probed in the current search is kept, and if a probe would be a duplicate – for instance because the search list has duplicate entries – it is simply omitted, with a possible debugging note.
+
+None of these tricks should alter which file is found for a module: they are all intended just to eliminate duplicate probes of the filesystem.
+
 ### Package, module, feature
 Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.tools.require-module` will also be present in both `*modules*` and `*features*` once this module is loaded – the latter helps a lot with conditionals in init files.
 
 ### Requiring and locating modules
-**`require-module`** will search for and `require` modules.  It has one mandatory argument which is the module name, and a number of keyword arguments:
+**`require-module`** will search for and `require` modules.  It has one mandatory argument which is the module name, and a fairly large number of keyword arguments.  Values for most of the keyword arguments are dynamically passed down[^6], so that recursive calls to `require-module` will get the same values as the parent call: exceptions are noted below.  The keywords and their default values are as follows.
 
-- `verbose` will cause it to tell you what it's doing, default `nil`;
-- `quiet` will cause some warnings not to happen (`quiet` and `verbose` can both be true), default `nil`;
-- `test` specifies the comparison function to use for module names, by default `#'string=` which is the right default;
-- `pretend` will cause it not to actually require the module, default `nil`;
-- `force` will cause it to forcibly require the module (by removing it from `*modules*`as the first step), default `nil`;
-- `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`;
-- `use`will cause it to use a package with the same name as the module after it is loaded if it exists, default `nil`;
-- `fallback` , if non-`nil`, should be a fallback function which will be be used to try to require a module if no location for it can be found, default `nil`;
-- `error` means that failure to require a module is an error, default `t`;
-- `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`;
-- `wrapper-arguments` is a list of keyword arguments passed to wrappers, default `'()`;
+- `verbose` will cause it to tell you what it's doing (on `*standard-output*`), default `nil`.
+- `debug` will turn on some debugging output to `*debug-io*`, and in particular will cause `locate-module` to talk about evaded duplicate searches due to the search list.  Default `nil`.
+- `quiet` will cause some warnings not to happen (`quiet` and `verbose` can both be true).  Default `nil`.
+- `test` specifies the comparison function to use for module names, by default `#'string=` which is the right default.
+- `pretend` will cause it not to actually require the module, default `nil`.
+- `force` will cause it to forcibly require the module (by removing it from `*modules*`as the first step), default `nil`.
+- `once` will cause it to check the cache of loaded truenames and only load a file if it either has not been loaded previously or if its write date is newer than the cached date, default `t`.
+- `cache` will update the cache of loaded truenames when a file is loaded, default `t`.
+- `reload` will cause it to reload any dependent modules if possible.  Default is `nil` & this is not inherited from the ambient value.  Note that all dependent modules will be reloaded: not just direct children.
+- `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`.
+- `use` will cause it to use a package with the same name as the module after it is loaded if it exists, default `nil`.  This is not inherited from the ambient value.
+- `fallback` , if non-`nil`, should be a fallback function which will be be used to try to require a module if no location for it can be found, default `nil`.
+- `error` means that failure to require a module is an error, default `t`.
+- `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`.
+- `hints` is a list of pathname designators which are hints as to where the module lives: if given, these are searched first.  Default is `()`, & this is not inherited from the ambient value.  This is used by reloading, but can also be used explicitly.
+- `module-component-rewriter`, if non-`nil`, is a designator for the function used to rewrite components (see below).  The default is the value of `*module-component-rewriter*`.
+- `wrapper-arguments` is a list of keyword arguments passed to wrappers, default `'()`.
 
-Wrappers are not yet documented.
+Wrappers are not yet documented.  Reloading is experimental.
 
 `require-module` returns:
 
@@ -109,20 +132,27 @@ Wrappers are not yet documented.
 
 It is not an error if a module doesn't define a package with its own name when the `use` option is given, but there will be a warning unless `quiet` is also given.
 
-**`locate-module`** locates a module: it's what `require-module` uses.  It has one mandatory argument which is the module name, and two keyword arguments:
+**`locate-module`** locates a module: it's what `require-module` uses to find things.  It has one mandatory argument which is the module name, and two keyword arguments.
 
-- `verbose` makes it say what it's doing, default `nil`;
-- `quiet` which will suppress some warnings, default `nil`;
 - `module-path-descriptions`is the list of module path-descriptions, default `*module-path-descriptions*`.
+- `hints` is a list of possible pathname designators for the module; if given it is searched first.  the default is `()`.  This is used by module reloading but can be used explicitly.
+- `module-component-rewriter` is the module component rewriter, the default being the value of `*module-component-rewriter*`.
+- `verbose` makes it say what it's doing, default `nil`.
+- `debug` enables some debugging output.
 
-`locate-module` will return:
+`locate-module` will return 5 values:
 
-- a compiled file name if there is a compiled file corresponding to the source file it located (by `compile-file-pathname`) and it is not older than the source file;
-- a source file name if there is no compiled file;
-- a source file name if there is a compiled file but it is older than the source file, in which case there will be a warning about this unless `quiet` is given;
-- `nil` if it didn't find anything (this is not an error).
+1. the selected pathname, or `nil`;
+2. the source pathname, or `nil`;
+3. the write date of the source pathname, or `nil` if none was found;
+4. the compiled pathname, or `nil`;
+5. the write date of the compiled file, or `nil` if none was found.
 
-The reason for this behaviour is that the file located is often a tiny 'loader' shim which never gets compiled[^6], so in this case there's nothing wrong if there is no compiled file.  If there is a compiled file but it is out of date it's best to return the source file: it's current, and anything that calls `locate-module` can choose to compile the file before loading, which is something `require-module` can do.
+If the selected pathname is `nil` then all the other values will be `nil`.  Otherwise it will be the newest of the source and compiled files, or the only one of them found if both do not exist.  In particular it will be `eq` to exactly one of the other pathnames in this case.  All pathnames returned will be truenames.
+
+The reason for this behaviour is that the file located is often a tiny 'loader' shim which never gets compiled[^7], so in this case there's nothing wrong if there is no compiled file.  If there is a compiled file but it is out of date it's best to return the source file: it's current, and anything that calls `locate-module` can choose to compile the file before loading, which is something `require-module` can do.
+
+`locate-module` does not either use or update any caches.
 
 **`require-modules`** is a shim around `require-module` which expects a list of module descriptions instead of a module name.  It takes all the same keyword arguments as `require-module`.  A *module description* is either
 
@@ -133,7 +163,9 @@ In the second case `require-module` is called with the two sets of arguments app
 
 **`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`: `(requires x y)` is `(require-modules (list x y) :fallback #'require)`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
 
-**`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^7].
+**`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^8].
+
+**`clear-module-caches`** is a function of no arguments which will clear both the cache of loaded files & their write dates and the structure (not really a cache) which maintains the notion of the descendants of a module.
 
 ### The search list
 The list of path descriptions is **`*module-path-descriptions*`**.  Each entry in this list is a *path description*, which is one of:
@@ -161,14 +193,11 @@ This will add a bunch of pathname descriptions for a logical host named `"QL` an
 ```lisp
 (define-module-path-descriptions "-"
   (lambda ()
-    (make-pathname :name "*-loader" :type "lisp"
-                   :defaults (pathname (sb-posix:getcwd))))
+    (merge-pathnames "*-loader.lisp" (pathname (sb-posix:getcwd))))
   (lambda ()
-    (make-pathname :name "loader" :type "lisp"
-                   :defaults (pathname (sb-posix:getcwd))))
+    (merge-pathnames "loader.lisp" (pathname (sb-posix:getcwd))))
   (lambda ()
-    (make-pathname :name "*" :type "lisp"
-                     :defaults (pathname (sb-posix:getcwd)))))
+    (make-pathname "*.lisp" (pathname (sb-posix:getcwd)))))
 ```
 
 This is what my SBCL init file looked like before `module-path-descriptions-for-function` exists, where it was the first thing that adds to `*module-path-descriptions*`.  The `"-"` host doesn't exist: it's just there because the macro needs something to be there.  Each form in the body is a function which will return a pathname based on the current directory, which means that subdirectories of the current directory get searched first.
@@ -191,10 +220,10 @@ A good example of how to use this function is to provide searching depending on 
       (append *module-path-descriptions*
               (module-path-descriptions-for-function
                (lambda ()
-                 (or *load-pathname* *compile-file-pathname*))
-               '((:name "*-loader" :type "lisp")
-                 (:name "loader" :type "lisp")
-                 (:name "*" :type "lisp")))))
+                 (or *compile-file-truename* *load-truename*))
+               '("*-loader.lisp"
+                 "loader.lisp"
+                 "*.lisp"))))
 ```
 
 You can't (easily) use this function with `define-module-path-descriptions`: you need to use it as above.  Note that the function will get called for each pathname spec.
@@ -220,7 +249,9 @@ Additionally, **`provides`** is a counterpart to `requires` and `needs`:  it let
 This is particularly useful for modules consisting of several files (with a 'loader' file to load them all): the forms given in `after-require-module` are run after the whole module is loaded.
 
 ### Other functionality
-There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  I'm not going to document this here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-require-module`, above.
+There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  This is not yet documented here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-require-module`, above.  This mechanism is subject to change.
+
+**`*module-component-rewriter*`** is a variable which may either be `nil` (the default) or a function designator.  If it is a function designator that function is called on each component of a dotted module name (for `"ORG.TFEB.FOSH"` the components are `"ORG"`, `"TFEB"` & `"FOSH"`) and the value it returns is used as the name of the component.  This is useful for components which have names which are not valid pathname components: for instance it can be used to rewrite a name like `"series/conduit"` into `"series-conduit"`(and this was its original purpose).
 
 ### Examples
 Given
@@ -324,17 +355,23 @@ If you have Quicklisp, this works:
  (:cl-ppcre :fallback ql:quickload))
 ```
 
-Which means you can write small programs which rely on Quicklisp to fetch and load things without either an ASDF system definition, or a bunch of explicit `eval-when`s in the sources to load things at compile time.
+Which means you can write small programs which rely on Quicklisp to fetch and load things without either an ASDF system definition, or a bunch of explicit `eval-when`s in the sources to load things at compile time.  In fact it is pretty much possible to use `needs` to informally define systems without a central system definition, even when those systems have dependencies on Quicklisp or other systems.
 
 ### Notes
-`require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild logical pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations.
+`require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations[^9].
+
+When making module path descriptions based on the current file being compiled or loaded always use truenames and always prefer `*compile-file-truename*` as otherwise you may get the name of some parent file which has asked to compile the file of interest.
 
 All of the functions accept strings or symbols as module names: they'll complain about anything else rather than blindly calling `string`.
 
 `needs` has changed incompatibly so it now quotes its arguments.
 
+`locate-module` used to return only what is now its first value: this is a compatible change, I think.
+
+A consequence of the caching of truenames is that, so long as the graph of modules and their requirements is a DAG, each file will be loaded just once.  That means it's perfectly fine for any file in the DAG just to say `(needs ...)` to express the files it relies on: if they're already loaded, they won't be loaded again unless they've changed.  If the graph has cycles you're in all sorts of trouble, of course.
+
 ## Installing modules automagically: `install-providers`
-I now use makefiles to install my personal CL modules and systems, and either ASDF or the LispWorks system definition tool to build them once installed[^8].  Previously I used an ancestor of this code.  It lives in the `org.tfeb.tools.install-providers` package and will add `:org.tfeb.tools.install-providers` to `*modules*`.
+I now use makefiles to install my personal CL modules and systems, and either ASDF or the LispWorks system definition tool to build them once installed[^10].  Previously I used an ancestor of this code.  It lives in the `org.tfeb.tools.install-providers` package and will add `:org.tfeb.tools.install-providers` to `*modules*`.
 
 **`install-providers`** will install a set of modules from the files they were originally loaded from into a directory tree under a specified root.  It has one argument which is the root under which to install things.  The remaining keyword arguments are:
 
@@ -387,8 +424,12 @@ The TFEB.ORG tools are copyright 2002, 2012, 2020-2021 Tim Bradshaw.  See `LICEN
 
 [^5]:	Note that, here and below, I am writing pathnames as strings.  This is just because I am being lazy: the system works in terms of pathnames, not strings.
 
-[^6]:	And, in fact, such loader shims often *can't* be compiled as they rely on things changing during the load of their source.
+[^6]:	The combination of `&rest args &key ...` and CL's carefully-thought-out leftmost-first-duplicates-allowed keyword argument handling makes this delightfully simple.
 
-[^7]:	It's hard to see a case where having `needs` *not* quote its arguments is useful since whatever values it uses would need to be available at compile-time anyway, which means you'd already almost certainly have to use `eval-when`.  In any case, if you want what `needs` does without the autoquoting, you should now use `(eval-when (...) (requires ...))`.
+[^7]:	And, in fact, such loader shims often *can't* be compiled as they rely on things changing during the load of their source.
 
-[^8]:	A key to making this work with ASDF is to turn off output translations and keep the compiled files alongside their sources.
+[^8]:	It's hard to see a case where having `needs` *not* quote its arguments is useful since whatever values it uses would need to be available at compile-time anyway, which means you'd already almost certainly have to use `eval-when`.  In any case, if you want what `needs` does without the autoquoting, you should now use `(eval-when (...) (requires ...))`.
+
+[^9]:	SBCL's behaviour is reasonable: what *should* `(make-pathname :name "*-loader" ...)` do?  Unfortunately it also leaves no way of making pathnames which have partly-wild components other than parsing namestrings.
+
+[^10]:	A key to making this work with ASDF is to turn off output translations and keep the compiled files alongside their sources.
