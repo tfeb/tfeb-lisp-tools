@@ -8,6 +8,7 @@
    #:add-module-path-descriptions
    #:define-module-path-descriptions
    #:module-path-descriptions-for-function
+   #:*module-component-separators*
    #:*module-component-rewriter*
    #:locate-module
    #:define-require-module-wrapper
@@ -146,6 +147,10 @@
                      nil))))))
           pathname-specs))
 
+(defvar *module-component-separators*
+  ;; Characters which separate module components
+  '(#\.))
+
 (defvar *module-component-rewriter*
   ;; if not NIL, a function designator which is used to rewrite module
   ;; components.
@@ -154,6 +159,8 @@
 (defun locate-module (module-name &key (module-path-descriptions
                                         *module-path-descriptions*)
                                   (hints '())
+                                  (module-component-separators
+                                   *module-component-separators*)
                                   (module-component-rewriter
                                    *module-component-rewriter*)
                                   (verbose nil)
@@ -218,12 +225,18 @@
     (format t "~&Looking for module ~S~%" module-name))
   (check-type module-name (or symbol string) "a symbol or string")
   (let* ((name (string module-name))
-         (nlist (if (find #\. name)
+         (nlist (if (find-if (lambda (c)
+                               (member c module-component-separators))
+                             name)
                     (loop with len = (length name)
                           for c upfrom 0
                           for opos = 0 then (+ pos 1)
                           for pos = (or (and (<= opos len)
-                                             (position #\. name :start opos))
+                                             (position-if
+                                               (lambda (c)
+                                                 (member c
+                                                         module-component-separators))
+                                               name :start opos))
                                         len)
                           until (> opos len)
                           collect (if module-component-rewriter
@@ -494,6 +507,10 @@
                                 ':module-path-descriptions
                                 *module-path-descriptions*))
                          (hints '())    ;not ambient
+                         (module-component-separators
+                          (getf *ambient-arguments*
+                                ':module-component-separators
+                                *module-component-separators*))
                          (module-component-rewriter
                           (getf *ambient-arguments*
                                 ':module-component-rewriter

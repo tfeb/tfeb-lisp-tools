@@ -59,7 +59,7 @@ Module names are case sensitive: `require`uses `string=` to compare them.  Depen
 This typically works reasonably well: if you use module names which are symbols, are searching a physical pathname, are using a case-sensitive filesystem and prefer lowercase filenames, then it will find a lowercase filename on the second try.
 
 ### The search algorithm
-The search process starts by splitting up a domain-structured module name into a list of strings, which it will then variously use as directory and name components for the search:
+The search process starts by splitting up a domain-structured module name into a list of strings (the set of characters which separate components can be controlled: see below), which it will then variously use as directory and name components for the search:
 
 - `"org.tfeb.hax"` is turned into `("org" "tfeb" "hax")`;
 - `:org.tfeb.hax` is turned into `("ORG" "TFEB" "HAX")` assuming standard reader settings.
@@ -116,6 +116,7 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 - `error` means that failure to require a module is an error, default `t`.
 - `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`.
 - `hints` is a list of pathname designators which are hints as to where the module lives: if given, these are searched first.  Default is `()`, & this is not inherited from the ambient value.  This is used by reloading, but can also be used explicitly.
+- `module-component-separators` is a list of characters which separate module components.  The default is the value of `*module-component-separators*` (which, by default, is `(#\.)`).
 - `module-component-rewriter`, if non-`nil`, is a designator for the function used to rewrite components (see below).  The default is the value of `*module-component-rewriter*`.
 - `wrapper-arguments` is a list of keyword arguments passed to wrappers, default `'()`.
 
@@ -136,6 +137,7 @@ It is not an error if a module doesn't define a package with its own name when t
 
 - `module-path-descriptions`is the list of module path-descriptions, default `*module-path-descriptions*`.
 - `hints` is a list of possible pathname designators for the module; if given it is searched first.  the default is `()`.  This is used by module reloading but can be used explicitly.
+- `module-component-separators` is a list of characters which separate module components.  The default is the value of `*module-component-separators*` (which, by default, is `(#\.)`).
 - `module-component-rewriter` is the module component rewriter, the default being the value of `*module-component-rewriter*`.
 - `verbose` makes it say what it's doing, default `nil`.
 - `debug` enables some debugging output.
@@ -251,7 +253,9 @@ This is particularly useful for modules consisting of several files (with a 'loa
 ### Other functionality
 There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  This is not yet documented here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-require-module`, above.  This mechanism is subject to change.
 
-**`*module-component-rewriter*`** is a variable which may either be `nil` (the default) or a function designator.  If it is a function designator that function is called on each component of a dotted module name (for `"ORG.TFEB.FOSH"` the components are `"ORG"`, `"TFEB"` & `"FOSH"`) and the value it returns is used as the name of the component.  This is useful for components which have names which are not valid pathname components: for instance it can be used to rewrite a name like `"series/conduit"` into `"series-conduit"`(and this was its original purpose).
+**`*module-component-separators*`** is the default list of characters which can separate module names.  Its initial value is `(#\.)`, meaning that names are separated by `.` characters.  You could, for instance, set it to be `(#\. #\/)` which would allow module named like `"org.tfeb.ts/test"` to parse as `("org" "tfeb" "ts" "test")`.
+
+**`*module-component-rewriter*`** is a variable which may either be `nil` (the default) or a function designator, and which provides the default module component rewriter.  If it is a function designator that function is called on each component of a dotted module name (for `"ORG.TFEB.FOSH"` the components are `"ORG"`, `"TFEB"` & `"FOSH"`) and the value it returns is used as the name of the component.  This is useful for components which have names which are not valid pathname components: for instance it can be used to rewrite a name like `"series/conduit"` into `"series-conduit"`(and this was its original purpose).
 
 ### Examples
 Given
