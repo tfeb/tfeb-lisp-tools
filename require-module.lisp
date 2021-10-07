@@ -540,6 +540,7 @@
                        :module-path-descriptions module-path-descriptions
                        :hints hints
                        :module-component-rewriter module-component-rewriter
+                       :module-component-separators module-component-separators
                        :verbose verbose :debug debug)
       (assert (or (not location)
                   (and (eql location compiled) compiled-date)
