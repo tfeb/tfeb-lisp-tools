@@ -491,8 +491,8 @@
 (defun require-module (m &rest arguments &key
                          (verbose (getf *ambient-arguments* ':verbose nil))
                          (debug (getf *ambient-arguments* ':debug nil))
-                         (quiet (getf *ambient-arguments* ':verbose nil))
-                         (test (getf *ambient-arguments* ':string #'string=))
+                         (quiet (getf *ambient-arguments* ':quiet nil))
+                         (test (getf *ambient-arguments* ':test #'string=))
                          (pretend (getf *ambient-arguments* ':pretend nil))
                          (force (getf *ambient-arguments* ':force nil))
                          (once (getf *ambient-arguments* ':once t))
@@ -501,7 +501,7 @@
                          (compile (getf *ambient-arguments* ':compile nil))
                          (use nil)      ;not ambient
                          (fallback (getf *ambient-arguments* ':fallback nil))
-                         (error (getf *ambient-arguments* ':fallback t))
+                         (error (getf *ambient-arguments* ':error t))
                          (module-path-descriptions
                           (getf *ambient-arguments*
                                 ':module-path-descriptions
