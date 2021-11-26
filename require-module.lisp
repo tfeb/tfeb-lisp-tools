@@ -10,6 +10,7 @@
    #:module-path-descriptions-for-function
    #:*module-component-separators*
    #:*module-component-rewriter*
+   #:*module-fallback-loaders*
    #:locate-module
    #:define-require-module-wrapper
    #:remove-require-module-wrapper
@@ -465,6 +466,14 @@
       (warn
        "COMPILE-FILE-PATHNAME is not idempotent: dynamic compilation may fail"))))
 
+(defvar *module-fallback-loaders*
+  ;; Fallback loaders for REQUIRE-MODULE.  Each entry is a function
+  ;; designator for a function of one argument & two keyword arguments
+  ;; which should return non-NIL if it loaded the module.  These are
+  ;; only used if there's no FALLBACK argument.  The argument is the
+  ;; module name, the keyword arguments are VERBOSE and QUIET.
+  '())
+
 (defvar *write-date-cache*
   ;; maps truenames to write dates
   (make-hash-table :test #'equal))
@@ -614,7 +623,7 @@
                                      (format *debug-io* "~&          [loading]~%"))
                                    (when verbose
                                      (format t "~&Loading ~S from ~A"
-                                         m to-load))
+                                             m to-load))
                                    (require m to-load)
                                    (setf did-load t)
                                    (when cache
@@ -647,20 +656,39 @@
               ;; Remaining arguments will come from ambient
               (require-module (car module/hint) :hints (cdr module/hint))))
           (values m did-load))
-       (fallback
-        ;; No location but there's a fallback: just call it, and
-        ;; assume it loaded the module
-       (when verbose
-          (format t "~&Trying fallback for ~S" m))
-       (let ((result (funcall fallback m)))
-         (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
-         (values result t)))
-       (error
-        ;; Signal an error
-        (error "No location found for ~S" m))
-       (t
-        ;; No error, just fail
-        (values nil nil)))))))
+         (pretend
+          ;; No location and we're pretending: just report what we
+          ;; would have tried
+          (cond
+           ((not (null *module-fallback-loaders*))
+            (format t "~%Would try fallback loaders for ~S~%" m))
+           (fallback
+            (format t "~%Would try fallback for ~S~%" m))
+           (t
+            (format t "~%Would fail for ~S~%" m))))
+         (t
+          ;; Just a bunch of fiddly cases around fallbacks and error
+          (when (and verbose (not (null *module-fallback-loaders*)))
+            (format t "~&Trying fallback loaders for ~S~%" m))
+          (let ((loaded (dolist (mfl *module-fallback-loaders* nil)
+                              (let ((result (funcall mfl m)))
+                                (when result (return result))))))
+            (cond
+             (loaded
+              (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
+              (values loaded t))
+             (fallback
+              (when verbose (format t "~&Trying fallback for ~S~%" m))
+              (let ((result (funcall fallback m)))
+                ;; Note the fallback function is just blindly assumed
+                ;; to have loaded the module whatever it returns
+                (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
+                (values result t)))
+             (error
+              (error "No location found for ~S" m))
+             (t
+              ;; otherwise just fail
+              (values nil nil))))))))))
 
 (defun require-modules (module-specifications
                         &rest keywords &key &allow-other-keys)

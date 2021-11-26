@@ -25,7 +25,7 @@ This naming convention ensures uniqueness of things like package names.  It does
 
 Nothing actually cares that names correspond to real DNS domains: some things do care that the namespace is hierarchically structured and big-endian.
 
-----
+---
 
 ## Requiring modules with searching: `require-module`
 Although CL now has competent tools for defining and distributing 'systems' of code, in the form of [ASDF](https://common-lisp.net/project/asdf/ "ASDF") and particularly [Quicklisp](https://www.quicklisp.org/ "Quicklisp"), not all bits of code are large enough to justify their use.  In particular it's in the nature of the incremental and  exploratory programming style encouraged by CL that people[^2] tend to write a bunch of little tools and utilities, living in single source files, which help them get their work done and which they reuse over time.  Some of these may be portable, some not, and many of them can be quite small: a tool I use very often is under 50 lines excluding noise, but including docstrings and comments, and I have had smaller ones.
@@ -112,7 +112,7 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 - `reload` will cause it to reload any dependent modules if possible.  Default is `nil` & this is not inherited from the ambient value.  Note that all dependent modules will be reloaded: not just direct children.
 - `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`.
 - `use` will cause it to use a package with the same name as the module after it is loaded if it exists, default `nil`.  This is not inherited from the ambient value.
-- `fallback` , if non-`nil`, should be a fallback function which will be be used to try to require a module if no location for it can be found, default `nil`.
+- `fallback` , if given, should be a final fallback function which will be be used to require a module if no location for it can be found.  This function is called after the functions on `*module-fallback-loaders*` are called, and only if none of them loaded the module.  Its default value is `nil`.  If this function is called it is assumed to have loaded the module regardless of its return value.  Thus no error will be signalled if it is given.
 - `error` means that failure to require a module is an error, default `t`.
 - `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`.
 - `hints` is a list of pathname designators which are hints as to where the module lives: if given, these are searched first.  Default is `()`, & this is not inherited from the ambient value.  This is used by reloading, but can also be used explicitly.
@@ -126,12 +126,18 @@ Wrappers are not yet documented.  Reloading is experimental.
 
 - its first argument and `t` if the module was loaded;
 - its first argument and `nil` if the module was already loaded (no search is done in this case);
-- the first value returned by the `fallback` function and `t` if it is given and no location was found;
-- `nil` and `nil` if there is no fallback, `error` is `nil` and the module was not found.
+ - the first value returned by a fallback loader and `t`if one of them loaded it;
+- the first value returned by the `fallback` function and `t` if it is given and no location was found (note that no error happens here: it's up to the fallback to decide if there should be an error).
+- `nil` and `nil` if there is no fallback loaders, no fallback, `error` is `nil` and the module was not found;
+-  an undefined value or values if `pretend` is given.
 
 `require-module` relies on `require` to do the actual work of loading the file and most of the work of maintaining `*modules*`.  It will only search (and thus only call `require` on the results of the search) if the module is not already present on `*modules*`, either because it was not there before the call or because it's just removed it due to the `force` option.
 
 It is not an error if a module doesn't define a package with its own name when the `use` option is given, but there will be a warning unless `quiet` is also given.
+
+**`*module-fallback-loaders*`** is a list of function designators which `require-module` will use as fallbacks by default.  Each entry should be designator for a function of one argument: the module name.  If the function returns true then the module is assumed to be loaded, and its return value will be the first value of `require-module`.  These functions are called before the function given as the `fallback` argument, if any, and it will only be called if none of them loads the module.
+
+The initial value of `*module-fallback-loaders*` is `()`.
 
 **`locate-module`** locates a module: it's what `require-module` uses to find things.  It has one mandatory argument which is the module name, and two keyword arguments.
 
@@ -163,7 +169,7 @@ The reason for this behaviour is that the file located is often a tiny 'loader' 
 
 In the second case `require-module` is called with the two sets of arguments appended to each other, with those from the module specification first.  Because CL uses the first of any repeated keyword arguments, this means that individual module specifications can override the keyword arguments provided to the function as a whole.  `require-modules` returns a list of lists of the two values returned by each `require-module` it calls.
 
-**`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`: `(requires x y)` is `(require-modules (list x y) :fallback #'require)`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
+**`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
 
 **`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^8].
 
@@ -361,6 +367,9 @@ If you have Quicklisp, this works:
 
 Which means you can write small programs which rely on Quicklisp to fetch and load things without either an ASDF system definition, or a bunch of explicit `eval-when`s in the sources to load things at compile time.  In fact it is pretty much possible to use `needs` to informally define systems without a central system definition, even when those systems have dependencies on Quicklisp or other systems.
 
+### Deficiencies
+There are no docstrings for anything: there should at least be brief ones.  There are no error or warning conditions defined which there should be.  Wrappers are not documented.
+
 ### Notes
 `require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations[^9].
 
@@ -412,11 +421,11 @@ Would
 nil
 ```
 
-----
+---
 
 The TFEB.ORG tools are copyright 2002, 2012, 2020-2021 Tim Bradshaw.  See `LICENSE` for the license.
 
-----
+---
 
 [^1]:	This README also has footnotes which GitHub does not support.  You'll just have to make sense of that.
 
