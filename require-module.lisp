@@ -211,8 +211,9 @@
   ;; MODULE-PATH-DESCRIPTIONS is the list of module path descriptions,
   ;; with the default being *MODULE-PATH-DESCRIPTIONS*.  VERBOSE, if
   ;; true, makes it chatter about what it's doing.  DEBUG, if true
-  ;; will cause it to note duplicate probes (this is really for
-  ;; debugging path descriptons, not this function).
+  ;; will cause it to note both the source path description of probes
+  ;; and duplicate probes (this is really for debugging path
+  ;; descriptons, not this function).
   ;;
   ;; Return 5 values: the file to load, the source file & its write
   ;; date, the compiled file and its write date.  If the file to load
@@ -263,11 +264,11 @@
                ;; returns if it found nothing
                (dolist (path pathlist)
                  (when verbose
-                   (format t "~&Probing ~A~@[~% as     ~A~]~% from ~:W~%"
+                   (format t "~&Probing ~A~@[~% as     ~A~]~%~:[~*~; from ~:W~%~]"
                            path
                            (and (typep path 'logical-pathname)
                                 (translate-logical-pathname path))
-                           from))
+                           debug from))
                  (let* ((already (gethash path probed))
                         (p (and (not already) (probe-file path)))
                         (pt (and p (file-write-date p)))

@@ -287,37 +287,34 @@ then
 > (locate-module :org.tfeb.pretend
                  :module-path-descriptions *my-mpds*
                  :verbose t)
+> (locate-module :org.tfeb.pretend
+                            :module-path-descriptions *my-mpds*
+                            :verbose t)
 Looking for module :org.tfeb.pretend
 Probing TFB:LIB;MODULES;ORG;TFEB;PRETEND;PRETEND.LISP
  as     /Users/tfb/lib/lw/modules/org/tfeb/pretend/pretend.lisp
- from "TFB:LIB;MODULES;*.LISP"
 Probing TFB:LIB;MODULES;ORG;TFEB;PRETEND.LISP
  as     /Users/tfb/lib/lw/modules/org/tfeb/pretend.lisp
- from "TFB:LIB;MODULES;*.LISP"
 Probing TFB:LIB;MODULES;ORG;TFEB;PRETEND;PRETEND-LOADER.LISP
  as     /Users/tfb/lib/lw/modules/org/tfeb/pretend/pretend-loader.lisp
- from "TFB:LIB;MODULES;*-LOADER.LISP"
 Probing TFB:LIB;MODULES;ORG;TFEB;PRETEND-LOADER.LISP
  as     /Users/tfb/lib/lw/modules/org/tfeb/pretend-loader.lisp
- from "TFB:LIB;MODULES;*-LOADER.LISP"
 Probing TFB:LIB;MODULES;ORG;TFEB;PRETEND;LOADER.LISP.NEWEST
  as     /Users/tfb/lib/lw/modules/org/tfeb/pretend/loader.lisp
- from "TFB:LIB;MODULES;LOADER.LISP"
 Probing TFB:LIB;MODULES;PRETEND;PRETEND.LISP
  as     /Users/tfb/lib/lw/modules/pretend/pretend.lisp
- from "TFB:LIB;MODULES;*.LISP"
 Probing TFB:LIB;MODULES;PRETEND.LISP
  as     /Users/tfb/lib/lw/modules/pretend.lisp
- from "TFB:LIB;MODULES;*.LISP"
 Probing TFB:LIB;MODULES;PRETEND;PRETEND-LOADER.LISP
  as     /Users/tfb/lib/lw/modules/pretend/pretend-loader.lisp
- from "TFB:LIB;MODULES;*-LOADER.LISP"
 Probing TFB:LIB;MODULES;PRETEND-LOADER.LISP
  as     /Users/tfb/lib/lw/modules/pretend-loader.lisp
- from "TFB:LIB;MODULES;*-LOADER.LISP"
 Probing TFB:LIB;MODULES;PRETEND;LOADER.LISP.NEWEST
  as     /Users/tfb/lib/lw/modules/pretend/loader.lisp
- from "TFB:LIB;MODULES;LOADER.LISP"
+nil
+nil
+nil
+nil
 nil
 ```
 
@@ -347,14 +344,16 @@ then
                  :verbose t)
 Looking for module :org.tfeb.utilities.permutations
 Probing /Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS/PERMUTATIONS.lisp
- from "/Local/packages/lispworks/lib/modules/*.lisp"
 Probing /Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.lisp
- from "/Local/packages/lispworks/lib/modules/*.lisp"
-Found /Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.64xfasl
-#P"/Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.64xfasl"
+Found /System/Volumes/Data/Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.lisp
+#P"/System/Volumes/Data/Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.lisp"
+#P"/System/Volumes/Data/Local/packages/lispworks/lib/modules/ORG/TFEB/UTILITIES/PERMUTATIONS.lisp"
+3823180214
+nil
+nil
 ```
 
-This second example is betraying the fact that I'm on a Mac: the mac's filesystem is case-insensitive / case-preserving, so the file is being found with an uppercase filename, when its name is 'really' lowercase.
+This second example is betraying the fact that I'm on a Mac: the mac's filesystem is case-insensitive / case-preserving, so the file is being found with an uppercase filename, when its name is 'really' lowercase.  If you provide the `debug`argument to `locate-module` you will get even more verbose output.
 
 ### A nice trick
 If you have Quicklisp, this works:
