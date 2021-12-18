@@ -165,13 +165,22 @@ The reason for this behaviour is that the file located is often a tiny 'loader' 
 **`require-modules`** is a shim around `require-module` which expects a list of module descriptions instead of a module name.  It takes all the same keyword arguments as `require-module`.  A *module description* is either
 
 - a module name;
-- or a cons of a module name and some arguments to `require-modules`.
+- or a cons of a module description and some arguments to `require-modules`.
 
-In the second case `require-module` is called with the two sets of arguments appended to each other, with those from the module specification first.  Because CL uses the first of any repeated keyword arguments, this means that individual module specifications can override the keyword arguments provided to the function as a whole.  `require-modules` returns a list of lists of the two values returned by each `require-module` it calls.
+In the second case either `require-module` (if the nested description is not itself a cons) or `require-modules` is called with the two sets of arguments appended to each other, with those from the module specification first.  Because CL uses the first of any repeated keyword arguments, this means that individual module specifications can override the keyword arguments provided to the function as a whole.  `require-modules` returns a list of lists of the two values returned by each `require-module` it calls.
 
 **`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
 
 **`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^8].
+
+The recursive behaviour of `require-modules` is inherited by both `requires` and `needs`, and lets you say things like this:
+
+```lisp
+(needs ((:org.tfeb.hax.collecting :org.tfeb.hax.iterate)
+        :compile t :use t))
+```
+
+which is sometimes convenient.
 
 **`clear-module-caches`** is a function of no arguments which will clear both the cache of loaded files & their write dates and the structure (not really a cache) which maintains the notion of the descendants of a module.
 

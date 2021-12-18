@@ -696,13 +696,19 @@
   ;; Require a list of module specifications.  Return a list of list
   ;; of the values returned by REQUIRE-MODULE for each module.  A
   ;; module specification is either the name of a module or a cons of
-  ;; (module name . keyword-arguments)
+  ;; a module specification and some default keyword arguments (this
+  ;; is recursive).
   (loop for m in module-specifications
         collect (multiple-value-list
-                 (if (atom m)
-                     (apply #'require-module m keywords)
-                   (apply #'require-module (first m)
-                          (append (rest m) keywords))))))
+                 (typecase m
+                   (cons
+                    (destructuring-bind (specification/s . defaults) m
+                      (apply (typecase specification/s
+                               (cons #'require-modules)
+                               (t #'require-module))
+                             (append defaults keywords))))
+                   (t
+                    (apply #'require-module m keywords))))))
 
 (defun requires (&rest module-specifications)
   ;; NOSPREAD version of require-modules, with a fallback to REQUIRE
