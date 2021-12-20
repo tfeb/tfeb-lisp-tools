@@ -706,6 +706,7 @@
                       (apply (typecase specification/s
                                (cons #'require-modules)
                                (t #'require-module))
+                             specification/s
                              (append defaults keywords))))
                    (t
                     (apply #'require-module m keywords))))))
