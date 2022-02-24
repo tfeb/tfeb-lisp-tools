@@ -4,6 +4,7 @@
 (defpackage :org.tfeb.tools.require-module
   (:use :cl)
   (:export
+   #:require-module-error
    #:*module-path-descriptions*
    #:add-module-path-descriptions
    #:define-module-path-descriptions
@@ -25,6 +26,14 @@
    #:provides))
 
 (in-package :org.tfeb.tools.require-module)
+
+(define-condition require-module-error (simple-error)
+  ())
+
+(defun require-module-error (format-control &rest format-arguments)
+  (error 'require-module-error
+         :format-control format-control
+         :format-arguments format-arguments))
 
 (defvar *module-path-descriptions*
   ;; The default list of (logical) path descriptions.  Each element
@@ -254,7 +263,7 @@
          (nname (first (last nlist)))
          (probed (make-hash-table :test #'equal)))
     (when (null nname)
-      (error "Didn't get a name from ~A" module-name))
+      (require-module-error "Didn't get a name from ~A" module-name))
     (labels ((found (it source source-date compiled compiled-date)
                ;; Just return directly what we found
                (return-from locate-module
@@ -319,7 +328,7 @@
                                    :directory `(:relative ,@dirlist))
                                   wild-path)))))
                      (unless (notany #'wild-pathname-p results)
-                       (error
+                       (require-module-error
                         "One of the paths ~{~A~^, ~} is still wild after merging"
                         results))
                      results)
@@ -330,7 +339,7 @@
                                 :directory `(:relative ,@dirlist ,name))
                                wild-path))))
                    (when (wild-pathname-p (first results))
-                     (error
+                     (require-module-error
                       "Path ~A is still wild after merging" (first results)))
                    results))))
       ;; Note the loops below are escaped from if PROBE finds
@@ -686,7 +695,7 @@
                 (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
                 (values result t)))
              (error
-              (error "No location found for ~S" m))
+              (require-module-error "No location found for ~S" m))
              (t
               ;; otherwise just fail
               (values nil nil))))))))))

@@ -1,8 +1,10 @@
 # [TFEB.ORG Lisp tools](https://github.com/tfeb/tfeb-lisp-tools "TFEB.ORG Lisp tools")
-This repo contains a system which will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Currently only two are published here:
+This repo contains a system which will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Here, a *tool* is a thing which helps with building programs, loading modules and similar things, rather than something you might use *in* a program.
 
 - `require-module` provides variants of `require` which will search for modules, as well as the mechanisms to control the search, and also a variant of `provide` which keeps records of the file which provided a module;
 - `install-providers` makes use of the records of module providers kept by `require-module` in order to copy them to places they will be found.
+- `build-modules` provides a way of compiling a collection of single-file modules, using `require-module` to locate their sources.
+- `feature-expressions` provides some tools for reasoning about implementation features after read time.
 
 I hope to add more tools as I disentangle them from the things they're currently entangled with and modernise them where needed.  All of the tools are intended to be portable CL except where documented.
 
@@ -265,6 +267,9 @@ Additionally, **`provides`** is a counterpart to `requires` and `needs`:  it let
 
 This is particularly useful for modules consisting of several files (with a 'loader' file to load them all): the forms given in `after-require-module` are run after the whole module is loaded.
 
+### Errors
+**`require-module-error`** is a condition class, and all errors signalled directly by any of the functions in the packages are of this class or, potentially, subclasses of it.  Currently it's a subclass of `simple-error` but it may not always be so.  Errors signalled by things `require-module` may call, such as `require` may not be of this class however.
+
 ### Other functionality
 There is a mechanism for adding wrappers around the process of actually providing a module (after its file has been located).  This is not yet documented here, but its main use has been to arrange to forget about system definitions for modules which involve some system definition tool, so the LispWorks development environment doesn't get cluttered up with system definitions that are not interesting.  It's also used to implement `after-require-module`, above.  This mechanism is subject to change.
 
@@ -364,7 +369,7 @@ nil
 
 This second example is betraying the fact that I'm on a Mac: the mac's filesystem is case-insensitive / case-preserving, so the file is being found with an uppercase filename, when its name is 'really' lowercase.  If you provide the `debug`argument to `locate-module` you will get even more verbose output.
 
-### A nice trick
+### Falling back to Quicklisp
 If you have Quicklisp, this works:
 
 ```lisp
@@ -374,6 +379,19 @@ If you have Quicklisp, this works:
 ```
 
 Which means you can write small programs which rely on Quicklisp to fetch and load things without either an ASDF system definition, or a bunch of explicit `eval-when`s in the sources to load things at compile time.  In fact it is pretty much possible to use `needs` to informally define systems without a central system definition, even when those systems have dependencies on Quicklisp or other systems.
+
+Another way of doing this, more globally, is
+
+```lisp
+(defun load-module/ql (m)
+  (handler-case
+      (ql:quickload m :verbose nil :silent t)
+    (ql:system-not-found () nil)))
+
+(pushnew 'load-module/ql *module-fallback-loaders*)
+```
+
+I have essentially this code in my init files.
 
 ### Deficiencies
 There are no docstrings for anything: there should at least be brief ones.  There are no error or warning conditions defined which there should be.  Wrappers are not documented.
@@ -429,9 +447,100 @@ Would
 nil
 ```
 
+## Building installed modules: `build-modules`
+I have a significant collection of single-file modules which generally don't have overriding ASDF or other system definitions.  `require-module` and its wrappers – `needs` is the interface I use most commonly – will arrange for modules which exist only as sources or for which the FASLs are out of date to be compiled on demand if needed.  Sometimes it's nice to point at a whole collection of module files in a source directory and say 'compile all of the installed versions of these that need to be compiled': that's what `build-modules` is for.
+
+**`compile-installed-modules`** ensures installed copies of a number of single-file modules are compiled, using `locate-module` to find the installed modules to consider.  Arguments:
+
+- `prefix`is a string designator for the module prefix, canonicalised to an upper-case string;
+- `files`is a list of pathname designators (typically source files, but only the name components of the pathnames are used) corresponding to the modules to be compiled.
+
+Keyword arguments:
+
+`omit` is a list of pathname designators (or a single pathname designator) of files to omit – generally these will be wild pathnames – default `()`;
+`only` is the opposite of `omit` – if given it means consider only these files – default `()`;
+`force`, if true, says to compile the modules even if the compiled files seems already to be up to date, default `nil`;
+`verbose` says to be more verbose, default `nil`;
+`pretend` says to pretend, default `nil`.
+
+`compile-installed-modules` returns a list of the things it compiled.  Each element of the list is a list of the local source file, the corresponding module source file, and the module name.
+
+### An example
+Pretending to compile the modules in the tools source directory.
+
+```lisp
+> (compile-installed-modules
+   "org.tfeb.tools" (directory "*.lisp")
+   :omit '("sysdcl" "*-cometh" "*-loader")
+   :pretend t :verbose t)
+Would skip /System/Volumes/Data/Local/tfb/packages/quicklisp/local-projects/org/tfeb/tools/ensuring-features.lisp
+ for ORG.TFEB.TOOLS.ENSURING-FEATURES
+ from /Users/tfb/src/lisp/systems/tools/ensuring-features.lisp
+ as fasl is newer
+Would skip /System/Volumes/Data/Local/tfb/packages/quicklisp/local-projects/org/tfeb/tools/require-module.lisp
+ for ORG.TFEB.TOOLS.REQUIRE-MODULE
+ from /Users/tfb/src/lisp/systems/tools/require-module.lisp
+ as fasl is newer
+Would compile /System/Volumes/Data/Local/tfb/packages/quicklisp/local-projects/org/tfeb/tools/build-modules.lisp
+ for ORG.TFEB.TOOLS.BUILD-MODULES
+ from /Users/tfb/src/lisp/systems/tools/build-modules.lisp
+Would skip /System/Volumes/Data/Local/tfb/packages/quicklisp/local-projects/org/tfeb/tools/install-providers.lisp
+ for ORG.TFEB.TOOLS.INSTALL-PROVIDERS
+ from /Users/tfb/src/lisp/systems/tools/install-providers.lisp
+ as fasl is newer
+((#P"/Users/tfb/src/lisp/systems/tools/build-modules.lisp"
+  #P"/System/Volumes/Data/Local/tfb/packages/quicklisp/local-projects/org/tfeb/tools/build-modules.lisp"
+  "ORG.TFEB.TOOLS.BUILD-MODULES"))
+```
+
+Here only `build-modules` itself would need to be compiled, as the FASL is out of date with the source.
+
+### Notes
+`build-modules` is only really useful for single-file modules which deal with their own interdependencies: it's not anything like a replacement for a system definition tool.  I have lots of these however, so it's useful for me.
+
+### Package, module
+`build-modules` lives in`org.tfeb.tools.build-modules` and provides  `:org.tfeb.tools.build-modules`.
+
+## Implementation features: `feature-expressions`
+CL's `#+` and `#-` syntax lets you evaluate [feature expressions](https://www.lispworks.com/documentation/HyperSpec/Body/24_aba.htm "Feature Expressions") – boolean expressions based on the [`*features*` variable](https://www.lispworks.com/documentation/HyperSpec/Body/v_featur.htm#STfeaturesST "*features*") – at *read* time, but without cleverness no later than that.  This is ideal to cope with syntax that can't be read unless some feature is present, such as packages which may not exist, or for differences between implementations, as a compiled file whose source was read by one implementation is not likely to be useful in another.
+
+But sometimes you want to check features of the implementation later than read time, or you want to know that a feature expression that was true at read time (and hence probably at compile time) is still true at load time (and hence probably at run time).  Sometimes also you might want to evaluate a feature expression directly, or to more generally write conditionals based on feature expressions.  This is what `feature-expressions` lets you do.
+
+**`evaluate-feature-expression`** is a function which evaluates feature expressions as described in [the spec](http://www.lispworks.com/documentation/HyperSpec/Body/24_aba.htm "Feature Expressions"), with the possible restriction that operators (`or`, `and` etc) need to be symbols in the `CL` package.   It has a compiler macro which will compile feature expressions which satisfy `constantp` into equivalent code.
+
+**`feature-case`** is a macro which dispatches on feature expressions.  It is like `typecase` rather than `case`: its body is a series of clauses of which the first elements are either feature expressions or one of the symbols `otherwise` or `t`, and whose remaining elements are forms to be evaluated if the feature expression is true, or in the case of `otherwise` or `t`, in any case.  An example:
+
+```lisp
+(feature-case
+  (:LispWorks
+   ...)
+  ((or :SBCL :CMUCL)
+   ...)
+  (otherwise
+   ...))
+```
+
+One result of these rules is that, if you expect there to be features named `otherwise` or `t` (which seems unlikely), you would need to check for them by a feature expression like, for instance `(or otherwise)`.
+
+**`ensuring-features`** is a macro designed to be used at top level, and whose purpose is to make assertions about various features at various times in the processing of the file.  Its body consists of  number of clauses.  Each clause consists of `(<time> [<feature-expression> ...])`, where `<time>` either a specification suitable for [`eval-when`](https://www.lispworks.com/documentation/HyperSpec/Body/s_eval_w.htm "eval-when") or `t`, which is a shorthand for `(:compile-toplevel :load-toplevel :execute)`.  Each `<feature-expression>` is a feature expression, to be evaluated by `evaluate-feature-expression` as above.
+
+`ensuring-features` expands into suitable `eval-when` expressions which will ensure that the specified feature expressions are true at the appropriate times, signalling an informative error if not.
+
+### Example
+```lisp
+(ensuring-features
+ ((:load-toplevel)
+  :org.tfeb.tools.feature-expressions))
+```
+
+This will ensure that `:org.tfeb.tools.feature-expressions` is present as a feature at load time (but it need not be at compile time or any other time).  `feature-expressions` contains this form in its own source code: the feature will not be present when it is being compiled, but will be when it is being loaded.
+
+### Package, module, feature
+`feature-expressions` lives in `org.tfeb.tools.feature-expressions`, provides `:org.tfeb.tools.feature-expressions` and also pushes a feature with this name onto `*features*`.
+
 ---
 
-The TFEB.ORG tools are copyright 2002, 2012, 2020-2021 Tim Bradshaw.  See `LICENSE` for the license.
+The TFEB.ORG tools are copyright 2002, 2012, 2020-2022 Tim Bradshaw.  See `LICENSE` for the license.
 
 ---
 
