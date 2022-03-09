@@ -5,7 +5,7 @@
 
 (defsystem "org.tfeb.tools"
   :description "TFEB tools"
-  :version "5.0.0"
+  :version "6.0.0"
   :author "Tim Bradshaw"
   :licence "MIT"
   :homepage "https://github.com/tfeb/tfeb-lisp-tools"
@@ -14,7 +14,9 @@
    (:file "install-providers" :depends-on ("require-module"))
    (:file "build-modules" :depends-on ("require-module"))
    (:file "feature-expressions")
+   (:file "deprecations")
    (:file "tools-cometh" :depends-on ("require-module"
                                       "install-providers"
                                       "build-modules"
-                                      "feature-expressions"))))
+                                      "feature-expressions"
+                                      "deprecations"))))

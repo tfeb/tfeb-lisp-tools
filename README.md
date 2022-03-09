@@ -1,10 +1,11 @@
 # [TFEB.ORG Lisp tools](https://github.com/tfeb/tfeb-lisp-tools "TFEB.ORG Lisp tools")
-This repo contains a system which will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Here, a *tool* is a thing which helps with building programs, loading modules and similar things, rather than something you might use *in* a program.
+This repo contains a system which will be a collection of fairly miscellaneous Common Lisp tools, which I have written over the years in order to generally get stuff done.  Here, a *tool* is a thing which helps with building programs, loading modules and similar things, rather than something you might use *in* a program which would be a [hack](../tfeb-lisp-hax/ "TFEB.ORG Lisp hax").
 
 - `require-module` provides variants of `require` which will search for modules, as well as the mechanisms to control the search, and also a variant of `provide` which keeps records of the file which provided a module;
 - `install-providers` makes use of the records of module providers kept by `require-module` in order to copy them to places they will be found.
 - `build-modules` provides a way of compiling a collection of single-file modules, using `require-module` to locate their sources.
 - `feature-expressions` provides some tools for reasoning about implementation features after read time.
+- `deprecations` provides tools for marking functions, generic functions and macros as deprecated, causing an optional compile-time warning and allowing reporting and mapping over deprecated things.
 
 I hope to add more tools as I disentangle them from the things they're currently entangled with and modernise them where needed.  All of the tools are intended to be portable CL except where documented.
 
@@ -537,6 +538,112 @@ This will ensure that `:org.tfeb.tools.feature-expressions` is present as a feat
 
 ### Package, module, feature
 `feature-expressions` lives in `org.tfeb.tools.feature-expressions`, provides `:org.tfeb.tools.feature-expressions` and also pushes a feature with this name onto `*features*`.
+
+## Deprecating code: `deprecations`
+Sometimes you don't get things right the first time, so you want to mark old interfaces as deprecated.   `deprecations` lets you define things as deprecated: something which is deprecated will cause a warning if code that uses it is compiled, unless such warnings are suppressed, and once code which uses deprecated functionality has been compiled it is possible to introspect about what files referred to what deprecated functionality.
+
+You can deprecate functions, generic functions, macros and symbol macros.  You *can't* deprecate variables, because I could not work out a way to do this without changing the semantics of code which refers to them: see below.
+
+All of the defining macros for deprecated functionality are plug-compatible with the standard defining macros: `(defun foo ...)` becomes `(define-deprecated-function foo ...)` with no other changes needed.
+
+Deprecations may be signalled as a subclass of `style-warning` at compile time, and are also recorded.  You can inhibit the compile-time warnings and also establish a local dynamic extent for deprecation recording so you can know which deprecations were noticed during which compilation.
+
+### Interface
+**`define-deprecated-function`** will define a deprecated function.  It is just like `defun` except that compilation of code which calls the function will, unless inhibited, signal a warning, and will in any case record information about it.  If the function has a docstring, this is used as the deprecation notice.
+
+**`define-deprecated-generic-function`** does the same thing for generic functions.  In this case the deprecation notice is pulled from the `:documentation` clause, if any.  As with functions the deprecation warning happens at the time code calling this function is compiled.
+
+**`define-deprecated-macro`** defines a deprecated macro: the deprecation notice comes from the docstring, if any.  The deprecation warning will happen when the macro is expanded.
+
+**`define-deprecated-symbol-macro`** defines a deprecated symbol macro.  These can't have deprecation notices as there is no room in the syntax for such a thing (symbol macros don't have docstrings).  The deprecation warning happens when the symbol macro is expanded.
+
+**`deprecation-warning`** is a subclass of `style-warning` used for deprecations.  It has readers:
+
+- `deprecation-warning-thing` is the name of the deprecated thing;
+- `deprecation-warning-what` is the sort of thing that was deprecated, which may be `:function`, `:generic-function`, `:macro`, `:symbol-macro` or possibly some other keyword symbol (but in fact not);
+- `deprecation-warning-notice` is the deprecation notice, or `nil`;
+- `deprecation-warning-location` is the truename of the file where the deprecation was noticed, or `nil` if there is no file.
+
+**`*inhibit-deprecation-warnings*`**, if true, will cause deprecation warnings to be inhibited during compilation.  If it is true then deprecations will be recorded but no warnings will happen.  Default value is `nil`.
+
+**`map-deprecations`** maps a function over information about deprecated functionality: the function is called with four arguments:
+
+- the location of the deprecation as above;
+- a list of the names of every deprecated thing in that location, with each name occurring only once;
+- a list of the 'whats' of the deprecated things, one for each thing, which are keywords, as above;
+- a list of the deprecation notices for each thing, as above.
+
+`map-deprecations` returns no values.
+
+**`clear-deprecations`** will clear the recorded deprecations.  Returns no values.
+
+**`report-deprecations`** produces a report on users of deprecated functionality.  It has two keyword arguments:
+
+- `stream` is the stream to print on, default `*standard-output*`;
+- `clear` will clear the set of deprecations after producing the report, default `nil`.
+
+It also returns no values.
+
+**`with-deprecations`** is a macro which establishes a dynamic context for reporting and warning about deprecations.  Syntax is `(with-deprecations (&key (inhibit nil)) ...)`: within the dynamic extent of the macro's body the deprecation reporting functions will report only deprecations which occurred during the extent of the body (and `clear-deprecations`, `map-deprecations` etc will see only those deprecations).  You can also optionally inhibit declaration warnings during the dynamic extent of the body.
+
+### Example
+Given a file containing this:
+
+```lisp
+(define-deprecated-generic-function bar (x)
+  (:documentation "use fish")
+  (:method (x)
+   x))
+
+(define-deprecated-function foo (x)
+  "use new-foo"
+  (bar x))
+
+(defun bone (x)
+  (foo x))
+```
+
+Then compiling this file without deprecations inhibited will produce two warnings which might appear as follows:
+
+```lisp
+Warning in foo: deprecated generic function bar in /path/to/x.lisp (use fish)
+Warning in bone: deprecated function foo in /path/to/x.lisp (use new-foo)
+```
+
+Alternatively you can choose to inhibit warnings and report:
+
+```lisp
+> (with-deprecations (:inhibit t)
+    (compile-file "x.lisp")
+    (report-deprecations))
+[... no deprecation warnings ...]
+/path/to/x.lisp:
+ generic function bar (use fish)
+ function foo (use new-foo)
+```
+
+Note that if the order of the definition of `bar` and `foo` are inverted you'll only get one warning & recorded deprecation: that's because it's all done by compiler macros.
+
+### Notes
+Deprecations for functions and generic functions are implemented by compiler macros: if you already have compiler macros for deprecated functionality things will not work as you expect.  Deprecations for macros and symbol macros are implemented by adding a form to the macro definition, which I think should be safe.
+
+Because things are implemented by compiler macros you won't see most deprecations unless you compile your code.
+
+An earlier version of the code attempted to implement deprecations for global variables by defining the global variable name as a symbol macro which expanded to a secret version of the name, producing a deprecation warning along the way.  This doesn't work because, if `*foo*` is deprecated then `(let ((*foo* ...)) ...)` binds `*foo*` lexically, and you can't have symbol macros for symbols declared special.  So such a system inevitably breaks the semantics of the program.  I don't think there is any way to deal with this problem portably.
+
+Because deprecation warnings *are* warnings and because the warning class is documented & has documented readers you can handle them, muffle them, and so on.  For instance:
+
+```lisp
+> (handler-case
+      (compile-file "x.lisp")
+    (deprecation-warning (w)
+      (error "deprecated: ~A" w)))
+```
+
+This came, with permission, from an idea by a friend of mine in an answer on [Stack overflow](https://stackoverflow.com/a/71393319 "Deprecated functions"), but it is now a lot more elaborate than that code was.
+
+### Package, module
+`deprecations` lives in `org.tfeb.tools.deprecations` and provides `:org.tfeb.tools.deprecations`.
 
 ---
 
