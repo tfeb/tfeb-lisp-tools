@@ -6,6 +6,7 @@ This repo contains a system which will be a collection of fairly miscellaneous C
 - `build-modules` provides a way of compiling a collection of single-file modules, using `require-module` to locate their sources.
 - `feature-expressions` provides some tools for reasoning about implementation features after read time.
 - `deprecations` provides tools for marking functions, generic functions and macros as deprecated, causing an optional compile-time warning and allowing reporting and mapping over deprecated things.
+- `asdf-module-sysdcls` can help writing ASDF system declarations for single-file modules: it wrote all but the main system declaration for this system.
 
 I hope to add more tools as I disentangle them from the things they're currently entangled with and modernise them where needed.  All of the tools are intended to be portable CL except where documented.
 
@@ -644,6 +645,100 @@ This came, with permission, from an idea by a friend of mine in an answer on [St
 
 ### Package, module
 `deprecations` lives in `org.tfeb.tools.deprecations` and provides `:org.tfeb.tools.deprecations`.
+
+## Writing ASDF files for modules: `asdf-module-sysdcls`
+Both this collection of tools and my [hax](https://github.com/tfeb/tfeb-lisp-hax "TFEB.ORG lisp hax") collection are really a lot of mostly-independent modules with occasional dependencies.  There's a single ASDF system definition only because I was too lazy to write lots of little ones and I never actually use it to load them other than for testing.
+
+`asdf-module-sysdcls` lets you easily write a large number of similar ASDF system definitions for single-file modules, so that people who do use ASDF for them can load individual modules.  So now both this system and the hax system have system definitions for each module.
+
+### Interface
+**`write-asdf-module-sysdcl`** will write a system declaration for a module which is part of a system.  It has two required arguments and two keyword arguments.  The required arguments are:
+
+- `module/desc` is either a string naming a module or a cons of a string naming a module and some keyword arguments to `defaystem`;
+- `of` is the name of the system of which `module/desc` is a component, and is used to construct the full names of things.
+
+The keyword arguments are:
+
+- `preface` is a list of `defsystem` keyword arguments which are simply stuffed into the `defsystem` form, with the default being `()`;
+- `default-pathname` is used to construct the filename of the system definition file that's written, with the default being either `*load-pathname*` or `*default-pathname-defaults*`.
+
+This function exists mostly to be in the expansion of the following macro, which is really the interface to this code.
+
+**`define-asdf-module-sysdcls`** lets you write ASDF system declarations for many modules in one go.  Syntax
+
+```lisp
+(define-asdf-module-sysdcls <of> (<kw> <val> ...) <module/desc> ...)
+```
+
+Here:
+
+- `<of>` is the system of which the modules are a part;
+- `<kw> <val> ...` are keywords and values for `defaystem`;
+- `<module/desc> ...` are modules or modules with more `defsystem` options.
+
+No arguments to this macro are evaluated.
+
+### Example
+It's easiest to describe what happens by example.  Given a file `a.lisp` which contains (suitable package setup forms and)
+
+```lisp
+(define-asdf-module-sysdcls "org.tfeb.a"
+    (:description "A subsystem of the TFEB a system"
+     :version "1.0.0"
+     :author "Tim Bradshaw")
+  "one"
+  ("two" :depends-on ("closer-mop"))
+```
+
+Then loading this file will cause two files to be written in the same directory:
+
+`org.tfeb.a.one.asd` will contain
+
+```lisp
+;;;; Module org.tfeb.a.one of org.tfeb.a
+;;;
+
+(in-package :asdf-user)
+
+(defsystem "org.tfeb.a.one"
+  :description
+  "A subsystem of the TFEB a systrm"
+  :version
+  "1.0.0"
+  :author
+  "Tim Bradshaw"
+  :components
+  ((:file "one")))
+```
+
+`org.tfeb.a.two.asd` will contain
+
+```lisp
+;;;; Module org.tfeb.a.teo of org.tfeb.a
+;;;
+
+(in-package :asdf-user)
+
+(defsystem "org.tfeb.a.one"
+  :description
+  "A subsystem of the TFEB a systrm"
+  :version
+  "1.0.0"
+  :author
+  "Tim Bradshaw"
+  :depends-on
+  ("closer-mop")
+  :components
+  ((:file "one")))
+```
+
+And that's what it does.  For more comprehensive (or at least larger-scale) examples look at the files with names like `write-*-sysdcls.lisp` in this system and also the hax system: those files wrote most of the system definition files for these systems.
+
+### Notes
+A future version of this module may be able to generate both the main `defsystem` and all the module systems from one form, which would avoid keeping multiple lists of modules.
+
+### Package, module
+`asdf-module-syadcls` lives in `org.tfeb.tools.asdf-module-sysdcls` and provides `:org.tfeb.tools.asdf-module-sysdcls`.
 
 ---
 
