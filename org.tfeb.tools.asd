@@ -5,10 +5,11 @@
 
 (defsystem "org.tfeb.tools"
   :description "TFEB tools"
-  :version "7.0.0"
+  :version "7.1.0"
   :author "Tim Bradshaw"
   :licence "MIT"
   :homepage "https://github.com/tfeb/tfeb-lisp-tools"
+  :in-order-to ((test-op (load-op "org.tfeb.tools/test")))
   :components
   ((:file "require-module")
    (:file "install-providers" :depends-on ("require-module"))
@@ -20,4 +21,16 @@
                                       "install-providers"
                                       "build-modules"
                                       "feature-expressions"
-                                      "deprecations"))))
+                                      "deprecations"
+                                      "asdf-module-sysdcls"))))
+
+(defsystem "org.tfeb.tools/test"
+  :description "TFEB tools tests"
+  :version "7.1.0"
+  :author "Tim Bradshaw"
+  :license "MIT"
+  :homepage "https://github.com/tfeb/tfeb-lisp-tools"
+  :depends-on ("org.tfeb.tools" "parachute")
+  :pathname "test/"
+  :components
+  ((:file "test-require-module")))
