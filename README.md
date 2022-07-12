@@ -106,6 +106,7 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 **`require-module`** will search for and `require` modules.  It has one mandatory argument which is the module name, and a fairly large number of keyword arguments.  Values for most of the keyword arguments are dynamically passed down[^6], so that recursive calls to `require-module` will get the same values as the parent call: exceptions are noted below.  The keywords and their default values are as follows.
 
 - `verbose` will cause it to tell you what it's doing (on `*standard-output*`), default `nil`.
+- `trace` will provide much less output than `verbose`, on `*trace-output*`, default `nil`.
 - `debug` will turn on some debugging output to `*debug-io*`, and in particular will cause `locate-module` to talk about evaded duplicate searches due to the search list.  Default `nil`.
 - `quiet` will cause some warnings not to happen (`quiet` and `verbose` can both be true).  Default `nil`.
 - `test` specifies the comparison function to use for module names, by default `#'string=` which is the right default.

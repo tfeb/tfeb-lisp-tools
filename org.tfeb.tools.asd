@@ -5,7 +5,7 @@
 
 (defsystem "org.tfeb.tools"
   :description "TFEB tools"
-  :version "7.1.0"
+  :version "7.2.0"
   :author "Tim Bradshaw"
   :licence "MIT"
   :homepage "https://github.com/tfeb/tfeb-lisp-tools"
@@ -26,7 +26,7 @@
 
 (defsystem "org.tfeb.tools/test"
   :description "TFEB tools tests"
-  :version "7.1.0"
+  :version "7.2.0"
   :author "Tim Bradshaw"
   :license "MIT"
   :homepage "https://github.com/tfeb/tfeb-lisp-tools"

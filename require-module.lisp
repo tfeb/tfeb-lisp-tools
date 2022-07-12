@@ -509,6 +509,7 @@
 
 (defun require-module (m &rest arguments &key
                          (verbose (getf *ambient-arguments* ':verbose nil))
+                         (trace (getf *ambient-arguments* ':trace nil))
                          (debug (getf *ambient-arguments* ':debug nil))
                          (quiet (getf *ambient-arguments* ':quiet nil))
                          (test (getf *ambient-arguments* ':test #'string=))
@@ -538,6 +539,9 @@
                                                   ':wrapper-arguments '())))
   ;; Require a module, using LOCATE-MODULE to find it and invoking any
   ;; wrappers.
+  (when trace
+    (format *trace-output* "~&~A~@[ within ~{~A~^, ~}~]"
+            m *ambient-modules*))
   (when debug
     (format *debug-io* "~&module    ~S~%~
                         ~@[within    ~S~%~]~
@@ -552,6 +556,8 @@
               *modules*
               :test test)
       (progn
+        (when trace
+          (format *trace-output* " already~%"))
         (maybe-use-module-package m :use use :verbose verbose :quiet quiet)
         (values m nil))
     (multiple-value-bind (location source source-date compiled compiled-date)
@@ -566,6 +572,10 @@
                   (and (eql location source) source-date))
           (location source source-date compiled compiled-date)
         "Oops: LOCATE-MODULE's values make no sense")
+      (when trace
+        (if location
+            (format *trace-output* " as ~A~%" location)
+          (format *trace-output* " missed~%")))
       (when debug
         (format *debug-io* "~&location  ~S~%~
                             source    ~S~%          (~S)~%~
