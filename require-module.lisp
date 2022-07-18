@@ -132,7 +132,7 @@
 ||#
 
 (defun module-path-descriptions-for-function (function
-                                                    pathname-specs)
+                                              pathname-specs)
   ;; For each pathname spec make a functiony path description which
   ;; calls FUNCTION, and if does not return NIL then merges either the
   ;; result of a suitable MAKE-PATHNAME call (for a listy pathname
@@ -737,9 +737,28 @@
 (defmacro needs (&rest module-specifications)
   ;; What do we need?  Things we need are always needed.
   ;; Note this quotes its arguments, which is an incompatible change
-  `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (requires ,@(loop for m in module-specifications
-                       collect `',m))))
+  (let ((requirations `(requires ,@(loop for m in module-specifications
+                                        collect `',m))))
+    `(progn
+       (eval-when (:compile-toplevel)
+         (let ((*module-path-descriptions*
+                (if *compile-file-truename*
+                    (cons (make-pathname :name ':wild :type "lisp"
+                                         :defaults *compile-file-truename*)
+                          *module-path-descriptions*)
+                  *module-path-descriptions*)))
+           ,requirations))
+       (eval-when (:load-toplevel)
+         (let ((*module-path-descriptions*
+                (if *load-truename*
+                    (cons (make-pathname :name ':wild :type "lisp"
+                                         :defaults *load-truename*)
+                          *module-path-descriptions*)
+                  *module-path-descriptions*)))
+           ,requirations))
+       (eval-when (:execute)
+         (let ((*module-path-descriptions* *module-path-descriptions*))
+           ,requirations)))))
 
 ;;; Hooks which can be run after modules are required
 ;;;

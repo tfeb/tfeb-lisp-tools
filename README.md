@@ -176,7 +176,18 @@ In the second case either `require-module` (if the nested description is not its
 
 **`requires`** is a NOSPREAD version of `require-modules` with a fallback to `require`.  So `requires` lets you say that you want one or more modules, and if `require-module` doesn't know how to get them then the system should try `require` in case it does.
 
-**`needs`**  lets you express a dependency on modules at compile time: it is `requires` wrapped in a suitable `eval-when`, but its arguments are quoted.  Note that `needs` quotes its arguments: an older version didn't so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^8].
+**`needs`**  lets you express a dependency on modules at compile time: it expands into an `eval-when` which:
+
+- at compile toplevel will bind `*module-path-descriptions*` to have a first element based on the current `*compile-file-truename*` and then `requires` a quoted version of its argument;
+- at load toplevel will bind `*module-path-descriptions*` to have a first element based on the current `*load-truename*` and then `requires` a quoted version of its argument;
+- otherwise binds `*module-path-descriptions*` to itself and `requires` a quoted version of its argument.
+
+The result of all this is that a file which contains, for instance `(needs "foo")` will look for `"foo"` in the same directory as the file, first.
+
+`needs` has undergone two incompatible changes over its lifetime.
+
+- Originally it didn't quote its arguments, so this is an incompatible change.  If you use strings or keywords as module names this doesn't matter, but it makes things like `(needs (:org.tfeb.hax.collecting :use t))` more natural[^8].
+- The rebinding of `*module-path-descriptions*` is new: see below for why this is done.  What this means is that if you load anything using `needs` which expects to assign to `*module-path-descriptions*` this will not work.
 
 The recursive behaviour of `require-modules` is inherited by both `requires` and `needs`, and lets you say things like this:
 
@@ -197,7 +208,7 @@ The list of path descriptions is **`*module-path-descriptions*`**.  Each entry i
 - `nil` which is ignored (this is useful so a function can return `nil` as a way of declining to provide a useful value;
 -  something else, which should be a pathname designator (probably either a list of a string) which is handed to `pathname` to turn into a pathname.
 
-The initial value of `*module-path-descriptions*` is `()`.
+The initial value of `*module-path-descriptions*` is  a list of one element: a function which, if either `*compile-file-truename*` or `*load-file-truename*` is non-`nil`, will construct a pathname for the module name using it as the defaults.
 
 It is perfectly possible to maintain `*module-path-descriptions*` manually, and that's how it worked for a long time.  There is now a macro which makes this a little easier, perhaps, and a utility which helps with entries which are functions.
 
@@ -235,7 +246,9 @@ There is a weirdness here which is worth noting: `define-module-path-description
 
 For each pathname spec this will return a a functiony path description which calls the function, and if does not return `nil` then merges either the result of a suitable `make-pathname` call (for a listy pathname spec) or a call to `pathname` (for any other pathname spec) with its result.  If the function returns NIL just return NIL.
 
-A good example of how to use this function is to provide searching depending on the current file being loaded or compiled:
+You can't (easily) use this function with `define-module-path-descriptions`: you need to use it as above.  Note that the function will get called for each pathname spec.
+
+It is tempting to use this function is to provide searching depending on the current file being loaded or compiled:
 
 ```lisp
 (setf *module-path-descriptions*
@@ -248,7 +261,7 @@ A good example of how to use this function is to provide searching depending on 
                  "*.lisp"))))
 ```
 
-You can't (easily) use this function with `define-module-path-descriptions`: you need to use it as above.  Note that the function will get called for each pathname spec.
+But *this probably will not do what you want* and will certainly lead to some nasty surprises.  The reason for this is easy to see: consider a file `a` which, at compile time, does a `require-module` on some other file, which in turn does a `require-module`.  This will lead to both `*compile-file-truename*` *and* `*load-truename*` to be bound, but to the names of different files.  It's then easy to see that there is no order of these two variables in the `or` expression which can be right in general.  This problem can't be solved by `*module-path-descriptions*`, but it *can* be solved by `needs`expanding to something involving `eval-when`, which is why `needs` does that.
 
 ### Providing modules
 As an interface to `install-providers`, below, there is a function called **`provide-module`**: it does exactly what `provide` does (it relies on `provide` to do the work) but also maintains an alist, **`*module-providers*`** which maps from module names to the files that provided them (from `*load-truename*`).

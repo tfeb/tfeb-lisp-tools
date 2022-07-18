@@ -3,11 +3,11 @@
 
 (in-package :asdf-user)
 
-(defsystem "org.tfeb.tools.install-providers"
+(asdf/parse-defsystem:defsystem "org.tfeb.tools.install-providers"
   :description
   "A subsystem of the TFEB tools"
   :version
-  "7.2.0"
+  "8.0.0"
   :author
   "Tim Bradshaw"
   :licence
