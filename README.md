@@ -178,9 +178,8 @@ In the second case either `require-module` (if the nested description is not its
 
 **`needs`**  lets you express a dependency on modules at compile time: it expands into an `eval-when` which:
 
-- at compile toplevel will bind `*module-path-descriptions*` to have a first element based on the current `*compile-file-truename*` and then `requires` a quoted version of its argument;
-- at load toplevel will bind `*module-path-descriptions*` to have a first element based on the current `*load-truename*` and then `requires` a quoted version of its argument;
-- otherwise binds `*module-path-descriptions*` to itself and `requires` a quoted version of its argument.
+- at compile toplevel will bind `*module-path-descriptions*` to have a first element based on the current `*compile-file-truename*` if that is not `nil` and then `requires` a quoted version of its argument;
+- at other timeswill bind `*module-path-descriptions*` to have a first element based on the current `*load-truename*` if that is not `nil` and then `requires` a quoted version of its argument;
 
 The result of all this is that a file which contains, for instance `(needs "foo")` will look for `"foo"` in the same directory as the file, first.
 

@@ -748,16 +748,13 @@
                           *module-path-descriptions*)
                   *module-path-descriptions*)))
            ,requirations))
-       (eval-when (:load-toplevel)
+       (eval-when (:load-toplevel :execute)
          (let ((*module-path-descriptions*
                 (if *load-truename*
                     (cons (make-pathname :name ':wild :type "lisp"
                                          :defaults *load-truename*)
                           *module-path-descriptions*)
                   *module-path-descriptions*)))
-           ,requirations))
-       (eval-when (:execute)
-         (let ((*module-path-descriptions* *module-path-descriptions*))
            ,requirations)))))
 
 ;;; Hooks which can be run after modules are required

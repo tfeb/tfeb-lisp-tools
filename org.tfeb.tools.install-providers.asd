@@ -7,7 +7,7 @@
   :description
   "A subsystem of the TFEB tools"
   :version
-  "8.0.0"
+  "8.0.1"
   :author
   "Tim Bradshaw"
   :licence
