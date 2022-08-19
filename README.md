@@ -409,10 +409,12 @@ Another way of doing this, more globally, is
 I have essentially this code in my init files.
 
 ### Deficiencies
-There are no docstrings for anything: there should at least be brief ones.  There are no error or warning conditions defined which there should be.  Wrappers are not documented.
+There are no docstrings for anything: there should at least be brief ones.  There are no error or warning conditions defined which there should be.  Wrappers are not documented.  There are too many overlapping reporting options.
 
 ### Notes
 `require-module` does quite a lot of processing of pathnames.  It is all intended to be portable but it also turns out to explore some of the boundaries of what implementations support.  As an example, SBCL can't currently deal with making partly-wild pathnames, so in SBCL you often need to provide stringy logical pathnames in configurations[^9].
+
+Generally the `trace` option tells you what you need to know about what is, or is not, being loaded from where without vastly cluttering everything with huge output.
 
 When making module path descriptions based on the current file being compiled or loaded always use truenames and always prefer `*compile-file-truename*` as otherwise you may get the name of some parent file which has asked to compile the file of interest.
 

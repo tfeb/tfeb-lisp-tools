@@ -540,8 +540,7 @@
   ;; Require a module, using LOCATE-MODULE to find it and invoking any
   ;; wrappers.
   (when trace
-    (format *trace-output* "~&~A~@[ within ~{~A~^, ~}~]"
-            m *ambient-modules*))
+    (format *trace-output* "~&~{~* ~}~A" *ambient-modules* m))
   (when debug
     (format *debug-io* "~&module    ~S~%~
                         ~@[within    ~S~%~]~
@@ -574,7 +573,7 @@
         "Oops: LOCATE-MODULE's values make no sense")
       (when trace
         (if location
-            (format *trace-output* " as ~A~%" location)
+            (format *trace-output* " as ~A" location)
           (format *trace-output* " missed~%")))
       (when debug
         (format *debug-io* "~&location  ~S~%~
@@ -641,6 +640,8 @@
                                  (progn
                                    (when debug
                                      (format *debug-io* "~&          [loading]~%"))
+                                   (when trace
+                                     (format *trace-output* " loading~%"))
                                    (when verbose
                                      (format t "~&Loading ~S from ~A"
                                              m to-load))
@@ -652,6 +653,8 @@
                                (progn
                                  (when debug
                                    (format *debug-io* "~&          [already]~%"))
+                                 (when trace
+                                   (format *trace-output* " already~%"))
                                  (when verbose
                                    (format t "~&Module ~S from ~A already loaded~%"
                                            m location)))))
