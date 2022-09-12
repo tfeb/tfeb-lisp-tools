@@ -29,7 +29,7 @@
                               :direction :output
                               :if-exists :supersede)
         (with-standard-io-syntax
-          (let ((*package* (load-time-value *package*))
+          (let ((*package* (load-time-value (find-package :asdf-user)))
                 (*print-case* :downcase))
             (format sysdcl ";;;; Module ~A of ~A~%;;;~%"
                     system-name of)

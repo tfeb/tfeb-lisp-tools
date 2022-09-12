@@ -3,11 +3,11 @@
 
 (in-package :asdf-user)
 
-(asdf/parse-defsystem:defsystem "org.tfeb.tools.asdf-module-sysdcls"
+(defsystem "org.tfeb.tools.asdf-module-sysdcls"
   :description
   "A subsystem of the TFEB tools"
   :version
-  "8.0.1"
+  (:read-file-line "VERSION")
   :author
   "Tim Bradshaw"
   :licence

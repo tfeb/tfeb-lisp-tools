@@ -612,6 +612,8 @@
                               ((eql location compiled) ;just load it
                                (values location compiled-date))
                               (compile  ;source but asked to compile
+                               (when trace
+                                 (format *trace-output* " compiling"))
                                (multiple-value-bind (cf warnings-p failed-p)
                                    (compile-file location)
                                  (declare (ignore warnings-p))
