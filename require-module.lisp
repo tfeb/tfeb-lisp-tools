@@ -478,10 +478,11 @@
 
 (defvar *module-fallback-loaders*
   ;; Fallback loaders for REQUIRE-MODULE.  Each entry is a function
-  ;; designator for a function of one argument & two keyword arguments
-  ;; which should return non-NIL if it loaded the module.  These are
-  ;; only used if there's no FALLBACK argument.  The argument is the
-  ;; module name, the keyword arguments are VERBOSE and QUIET.
+  ;; designator for a function which takes a single argument and all
+  ;; the keyword arguments explicitly given to REQUIRE-MODULE.  It
+  ;; should return non-NIL if it loaded the module.  These are called
+  ;; before the value of the FALLBACK argument, which is not used if
+  ;; any of them loaded the module.
   '())
 
 (defvar *write-date-cache*
@@ -696,7 +697,7 @@
           (when (and verbose (not (null *module-fallback-loaders*)))
             (format t "~&Trying fallback loaders for ~S~%" m))
           (let ((loaded (dolist (mfl *module-fallback-loaders* nil)
-                              (let ((result (funcall mfl m)))
+                              (let ((result (apply mfl m *ambient-arguments*)))
                                 (when result (return result))))))
             (cond
              (loaded

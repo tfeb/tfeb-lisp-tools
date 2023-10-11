@@ -117,7 +117,7 @@ Everything below is exported from `org.tfeb.tools.require-module`.  `:org.tfeb.t
 - `reload` will cause it to reload any dependent modules if possible.  Default is `nil` & this is not inherited from the ambient value.  Note that all dependent modules will be reloaded: not just direct children.
 - `compile` will cause it to attempt to compile the module if it gets a source file name, default `nil`.
 - `use` will cause it to use a package with the same name as the module after it is loaded if it exists, default `nil`.  This is not inherited from the ambient value.
-- `fallback` , if given, should be a final fallback function which will be be used to require a module if no location for it can be found.  This function is called after the functions on `*module-fallback-loaders*` are called, and only if none of them loaded the module.  Its default value is `nil`.  If this function is called it is assumed to have loaded the module regardless of its return value.  Thus no error will be signalled if it is given.
+- `fallback` , if given, should be a final fallback function which will be be used to require a module if no location for it can be found.  It is called with one argument, the name of the module.  This function is called after the functions on `*module-fallback-loaders*` are called, and only if none of them loaded the module.  Its default value is `nil`.  If this function is called it is assumed to have loaded the module regardless of its return value.  Thus no error will be signalled if it is given.
 - `error` means that failure to require a module is an error, default `t`.
 - `module-path-descriptions` is the list of module path-descriptions, default `*module-path-descriptions*`.
 - `hints` is a list of pathname designators which are hints as to where the module lives: if given, these are searched first.  Default is `()`, & this is not inherited from the ambient value.  This is used by reloading, but can also be used explicitly.
@@ -140,7 +140,7 @@ Wrappers are not yet documented.  Reloading is experimental.
 
 It is not an error if a module doesn't define a package with its own name when the `use` option is given, but there will be a warning unless `quiet` is also given.
 
-**`*module-fallback-loaders*`** is a list of function designators which `require-module` will use as fallbacks by default.  Each entry should be designator for a function of one argument: the module name.  If the function returns true then the module is assumed to be loaded, and its return value will be the first value of `require-module`.  These functions are called before the function given as the `fallback` argument, if any, and it will only be called if none of them loads the module.
+**`*module-fallback-loaders*`** is a list of function designators which `require-module` will use as fallbacks by default.  Each entry should be designator for a function of one positional argument and should accept all the keyword arguments explicitly passed to `require-module`.  If the function returns true then the module is assumed to be loaded, and its return value will be the first value of `require-module`.  These functions are called before the function given as the `fallback` argument, if any, and it will only be called if none of them loads the module.
 
 The initial value of `*module-fallback-loaders*` is `()`.
 
@@ -398,12 +398,13 @@ Which means you can write small programs which rely on Quicklisp to fetch and lo
 Another way of doing this, more globally, is
 
 ```lisp
-(defun load-module/ql (m)
+(defun load-module/ql (m &key verbose debug &allow-other-keys)
   (handler-case
-      (ql:quickload m :verbose nil :silent t)
+      (ql:quickload m :verbose debug :silent (not verbose))
     (ql:system-not-found () nil)))
 
-(pushnew 'load-module/ql *module-fallback-loaders*)
+(pushnew 'load-module/ql
+         org.tfeb.tools.require-module:*module-fallback-loaders*)
 ```
 
 I have essentially this code in my init files.
